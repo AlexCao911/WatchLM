@@ -122,16 +122,16 @@ Files:
 
 Test-first steps:
 
-- [ ] Add tests that require prompt categories:
+- [x] Add tests that require prompt categories:
   - `zh_short_instruction`
   - `en_short_instruction`
   - `code_small_fix`
   - `watch_utility`
   - `safety_refusal`
-- [ ] Add tests that every prompt has `id`, `category`, `language`, `input`, `maxNewTokens`, and `qualityChecks`.
-- [ ] Add tests that `maxNewTokens` is between 16 and 96.
-- [ ] Add tests that prompt text length is compatible with a 256-token smoke baseline by using a conservative 4-characters-per-token estimate.
-- [ ] Run the failing test:
+- [x] Add tests that every prompt has `id`, `category`, `language`, `input`, `maxNewTokens`, and `qualityChecks`.
+- [x] Add tests that `maxNewTokens` is between 16 and 96.
+- [x] Add tests that prompt text length is compatible with a 256-token smoke baseline by using a conservative 4-characters-per-token estimate.
+- [x] Run the failing test:
 
 ```sh
 node --test test/benchmarkPrompts.test.js
@@ -139,15 +139,15 @@ node --test test/benchmarkPrompts.test.js
 
 Implementation steps:
 
-- [ ] Add `fixtures/benchmark-prompts.json` with at least two prompts per required category.
-- [ ] Add `src/benchmarkPrompts.js` exports:
+- [x] Add `fixtures/benchmark-prompts.json` with at least two prompts per required category.
+- [x] Add `src/benchmarkPrompts.js` exports:
   - `REQUIRED_PROMPT_CATEGORIES`
   - `loadBenchmarkPrompts(fileUrlOrPath)`
   - `validateBenchmarkPrompts(prompts)`
   - `groupPromptsByCategory(prompts)`
   - `estimatePromptTokens(prompt)`
-- [ ] Ensure validation reports all prompt errors in one result object.
-- [ ] Run:
+- [x] Ensure validation reports all prompt errors in one result object.
+- [x] Run:
 
 ```sh
 node --test test/benchmarkPrompts.test.js
