@@ -1,1 +1,6 @@
 .build/
+artifacts/**/*.mlpackage
+artifacts/**/*.mlmodelc
+artifacts/**/*.gguf
+artifacts/**/*.safetensors
+artifacts/benchmarks/**/*.json

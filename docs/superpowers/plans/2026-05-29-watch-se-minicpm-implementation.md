@@ -376,7 +376,7 @@ Files:
 
 Test-first steps:
 
-- [ ] Add tests that conversion artifacts must declare:
+- [x] Add tests that conversion artifacts must declare:
   - source checkpoint id
   - source revision or checksum
   - tokenizer checksum
@@ -386,8 +386,8 @@ Test-first steps:
   - quantization policy id
   - logits validation summary
   - excluded large artifact paths
-- [ ] Add tests that `.mlpackage`, `.mlmodelc`, `.gguf`, `.safetensors`, and generated benchmark outputs are ignored by default.
-- [ ] Run the failing test:
+- [x] Add tests that `.mlpackage`, `.mlmodelc`, `.gguf`, `.safetensors`, and generated benchmark outputs are ignored by default.
+- [x] Run the failing test:
 
 ```sh
 node --test test/conversionContract.test.js
@@ -395,10 +395,10 @@ node --test test/conversionContract.test.js
 
 Implementation steps:
 
-- [ ] Add `conversion/coreml-artifact-contract.json`.
-- [ ] Add `conversion/README.md` explaining reproducible artifact generation and why large model files stay outside git.
-- [ ] Add `.gitignore` entries for generated model and report artifacts.
-- [ ] Run:
+- [x] Add `conversion/coreml-artifact-contract.json`.
+- [x] Add `conversion/README.md` explaining reproducible artifact generation and why large model files stay outside git.
+- [x] Add `.gitignore` entries for generated model and report artifacts.
+- [x] Run:
 
 ```sh
 node --test test/conversionContract.test.js

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "sourceCheckpoint": {
+    "id": "openbmb/MiniCPM5-1B",
+    "revision": "design-contract",
+    "sha256": null
+  },
+  "tokenizer": {
+    "source": "openbmb/MiniCPM5-1B",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "chatTemplate": "minicpm5-no-think",
+    "vocabularyPreserved": true
+  },
+  "artifacts": {
+    "prefillModelPath": "artifacts/coreml/watch-se-3/prefill-512.mlpackage",
+    "decodeModelPath": "artifacts/coreml/watch-se-3/decode-512.mlpackage",
+    "entrypoints": ["prefill", "decode"]
+  },
+  "contextVariant": 512,
+  "quantizationPolicyId": "mixed-int4-ffn-int8-attn-kv",
+  "logitsValidation": {
+    "teacherModelId": "openbmb/MiniCPM5-1B",
+    "maxAbsoluteError": 0,
+    "topKAgreement": 0,
+    "summary": "Populate with BF16 teacher comparison metrics when a real Core ML artifact is generated."
+  },
+  "excludedLargeArtifactPaths": [
+    "artifacts/**/*.mlpackage",
+    "artifacts/**/*.mlmodelc",
+    "artifacts/**/*.gguf",
+    "artifacts/**/*.safetensors",
+    "artifacts/benchmarks/**/*.json"
+  ]
+}
