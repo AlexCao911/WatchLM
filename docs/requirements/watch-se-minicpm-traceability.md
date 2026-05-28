@@ -66,6 +66,6 @@ The goal cannot be marked complete until current-state evidence proves all appli
 - If a real MiniCPM Core ML artifact is not committed because of size, the repo includes reproducible conversion/packaging commands and a manifest contract.
 - Fallback decisions are supported by benchmark evidence rather than convenience.
 
-## Open Approval Gate
+## Approval Gate
 
-The Superpowers brainstorming workflow requires explicit design approval before the implementation plan is written. Until approval is recorded in the conversation, design-stage documentation may continue, but planning and implementation should not begin.
+The Superpowers brainstorming approval gate was satisfied by the user message on 2026-05-29: "开始执行 继续实现". Planning and implementation may proceed under the requirement that each completed part is tested and committed separately.
