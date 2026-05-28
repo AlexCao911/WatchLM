@@ -58,7 +58,7 @@ Files:
 
 Test-first steps:
 
-- [ ] Add `test/modelManifest.test.js` with coverage for:
+- [x] Add `test/modelManifest.test.js` with coverage for:
   - valid MiniCPM5 manifest passes.
   - runtime must equal `coreml-mlprogram`.
   - source model must equal `openbmb/MiniCPM5-1B`.
@@ -67,7 +67,7 @@ Test-first steps:
   - model bundle location must not be `app-bundle`.
   - quantization policy must include mixed precision and int8 KV cache.
   - `selectContextVariant` clamps requests to the largest supported variant that fits.
-- [ ] Run the failing test:
+- [x] Run the failing test:
 
 ```sh
 node --test test/modelManifest.test.js
@@ -75,8 +75,8 @@ node --test test/modelManifest.test.js
 
 Implementation steps:
 
-- [ ] Add `package.json` with `"type": "module"` and a `test` script that runs `node --test`.
-- [ ] Add `fixtures/sample-model-manifest.json` containing:
+- [x] Add `package.json` with `"type": "module"` and a `test` script that runs `node --test`.
+- [x] Add `fixtures/sample-model-manifest.json` containing:
   - model id `openbmb/MiniCPM5-1B`
   - runtime `coreml-mlprogram`
   - device profiles `watch-se-2` and `watch-se-3`
@@ -84,7 +84,7 @@ Implementation steps:
   - architecture dimensions from the design spec
   - mixed precision quantization policy
   - asset storage location `application-support`
-- [ ] Add `src/modelManifest.js` exports:
+- [x] Add `src/modelManifest.js` exports:
   - `SUPPORTED_CONTEXT_VARIANTS`
   - `SUPPORTED_DEVICE_PROFILES`
   - `EXPECTED_MODEL_ID`
@@ -94,9 +94,9 @@ Implementation steps:
   - `assertValidModelManifest(manifest)`
   - `selectContextVariant(manifest, deviceProfile, requestedTokens)`
   - `summarizeModelManifest(manifest)`
-- [ ] Make validation return `{ ok, errors, warnings }` without throwing.
-- [ ] Make `assertValidModelManifest` throw one combined error with all validation messages.
-- [ ] Run:
+- [x] Make validation return `{ ok, errors, warnings }` without throwing.
+- [x] Make `assertValidModelManifest` throw one combined error with all validation messages.
+- [x] Run:
 
 ```sh
 node --test test/modelManifest.test.js
