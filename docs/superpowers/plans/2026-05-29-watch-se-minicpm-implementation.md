@@ -173,7 +173,7 @@ Files:
 
 Test-first steps:
 
-- [ ] Add tests that a report must include:
+- [x] Add tests that a report must include:
   - source model id
   - device profile
   - runtime
@@ -187,14 +187,14 @@ Test-first steps:
   - thermal state over five short turns
   - quality drift summary
   - fallback decision
-- [ ] Add SE 3 gate tests:
+- [x] Add SE 3 gate tests:
   - first visible token target is at most 3 seconds.
   - sustained decode target is at least 3 tokens per second.
-- [ ] Add SE 2 gate tests:
+- [x] Add SE 2 gate tests:
   - first visible token target is at most 5 seconds.
   - sustained decode target is at least 1.5 tokens per second.
-- [ ] Add tests that fallback decisions require evidence links or report sections.
-- [ ] Run the failing test:
+- [x] Add tests that fallback decisions require evidence links or report sections.
+- [x] Run the failing test:
 
 ```sh
 node --test test/benchmarkReport.test.js
@@ -202,15 +202,15 @@ node --test test/benchmarkReport.test.js
 
 Implementation steps:
 
-- [ ] Add `fixtures/sample-benchmark-report.json` with one SE 2 diagnostic report and one SE 3 target report.
-- [ ] Add `src/benchmarkReport.js` exports:
+- [x] Add `fixtures/sample-benchmark-report.json` with one SE 2 diagnostic report and one SE 3 target report.
+- [x] Add `src/benchmarkReport.js` exports:
   - `DEVICE_TARGETS`
   - `validateBenchmarkReport(report)`
   - `evaluateBenchmarkGates(report)`
   - `summarizeBenchmarkReport(report)`
   - `requiresFallbackEvidence(report)`
-- [ ] Ensure report validation uses the manifest constants from `src/modelManifest.js`.
-- [ ] Run:
+- [x] Ensure report validation uses the manifest constants from `src/modelManifest.js`.
+- [x] Run:
 
 ```sh
 node --test test/benchmarkReport.test.js
