@@ -280,6 +280,7 @@ Purpose: create watch-consumable runtime and asset state contracts without requi
 Files:
 
 - `Package.swift`
+- `.gitignore`
 - `Sources/WatchLMCore/DeviceProfile.swift`
 - `Sources/WatchLMCore/ModelManifest.swift`
 - `Sources/WatchLMCore/ContextVariantSelector.swift`
@@ -292,11 +293,11 @@ Files:
 
 Test-first steps:
 
-- [ ] Add Swift tests for manifest decoding from JSON matching `fixtures/sample-model-manifest.json`.
-- [ ] Add tests that context selection clamps to supported variants.
-- [ ] Add tests that asset states represent missing, installing, installed, invalid hash, incompatible manifest, and unavailable runtime.
-- [ ] Add tests that inference session state supports idle, prefill, decoding, cancelled, finished, failed, and thermal degraded states.
-- [ ] Run the failing tests:
+- [x] Add Swift tests for manifest decoding from JSON matching `fixtures/sample-model-manifest.json`.
+- [x] Add tests that context selection clamps to supported variants.
+- [x] Add tests that asset states represent missing, installing, installed, invalid hash, incompatible manifest, and unavailable runtime.
+- [x] Add tests that inference session state supports idle, prefill, decoding, cancelled, finished, failed, and thermal degraded states.
+- [x] Run the failing tests:
 
 ```sh
 swift test
@@ -304,10 +305,10 @@ swift test
 
 Implementation steps:
 
-- [ ] Add `Package.swift` with library target `WatchLMCore`.
-- [ ] Implement Swift types with `Codable`, `Equatable`, and small pure functions only.
-- [ ] Avoid network, iPhone companion, and real Core ML calls in this package.
-- [ ] Run:
+- [x] Add `Package.swift` with library target `WatchLMCore`.
+- [x] Implement Swift types with `Codable`, `Equatable`, and small pure functions only.
+- [x] Avoid network, iPhone companion, and real Core ML calls in this package.
+- [x] Run:
 
 ```sh
 swift test
