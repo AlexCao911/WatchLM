@@ -424,7 +424,7 @@ Files:
 
 Steps:
 
-- [ ] Document the exact watchOS app shell screens:
+- [x] Document the exact watchOS app shell screens:
   - missing model
   - installing model
   - ready
@@ -432,9 +432,9 @@ Steps:
   - cancelled
   - thermal degraded
   - error recovery
-- [ ] Document which `WatchLMCore` types each screen consumes.
-- [ ] Update traceability matrix evidence rows for completed host tooling and Swift runtime contracts.
-- [ ] Run:
+- [x] Document which `WatchLMCore` types each screen consumes.
+- [x] Update traceability matrix evidence rows for completed host tooling and Swift runtime contracts.
+- [x] Run:
 
 ```sh
 node --test
