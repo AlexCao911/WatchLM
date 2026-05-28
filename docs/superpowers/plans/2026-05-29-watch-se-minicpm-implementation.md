@@ -236,12 +236,12 @@ Files:
 
 Test-first steps:
 
-- [ ] Add CLI tests that run `node bin/watchlm-validate.js` against:
+- [x] Add CLI tests that run `node bin/watchlm-validate.js` against:
   - `fixtures/sample-model-manifest.json`
   - `fixtures/benchmark-prompts.json`
   - `fixtures/sample-benchmark-report.json`
-- [ ] Add a negative test fixture in the test file itself, written to a temporary directory during the test, so invalid runtime output exits non-zero.
-- [ ] Run the failing test:
+- [x] Add a negative test fixture in the test file itself, written to a temporary directory during the test, so invalid runtime output exits non-zero.
+- [x] Run the failing test:
 
 ```sh
 node --test test/validationCli.test.js
@@ -249,17 +249,17 @@ node --test test/validationCli.test.js
 
 Implementation steps:
 
-- [ ] Add `bin/watchlm-validate.js` with commands:
+- [x] Add `bin/watchlm-validate.js` with commands:
   - `manifest <path>`
   - `prompts <path>`
   - `report <path>`
   - `all --manifest <path> --prompts <path> --report <path>`
-- [ ] Add `README.md` with:
+- [x] Add `README.md` with:
   - project purpose
   - local validation commands
   - first implementation status
   - note that real model artifacts are intentionally not committed
-- [ ] Run:
+- [x] Run:
 
 ```sh
 node --test test/validationCli.test.js
