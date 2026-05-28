@@ -335,11 +335,11 @@ Files:
 
 Test-first steps:
 
-- [ ] Add tests that the runtime protocol records load, prefill, first token, decode step, and total timings.
-- [ ] Add tests that mock streaming emits tokens incrementally.
-- [ ] Add tests that cancellation is observed at token boundaries.
-- [ ] Add tests that runtime errors are typed and user-visible.
-- [ ] Run the failing tests:
+- [x] Add tests that the runtime protocol records load, prefill, first token, decode step, and total timings.
+- [x] Add tests that mock streaming emits tokens incrementally.
+- [x] Add tests that cancellation is observed at token boundaries.
+- [x] Add tests that runtime errors are typed and user-visible.
+- [x] Run the failing tests:
 
 ```sh
 swift test
@@ -347,9 +347,9 @@ swift test
 
 Implementation steps:
 
-- [ ] Implement protocols and mock runtime in pure Swift.
-- [ ] Keep Core ML imports out of `WatchLMCore`; a future watch target will provide the concrete adapter.
-- [ ] Run:
+- [x] Implement protocols and mock runtime in pure Swift.
+- [x] Keep Core ML imports out of `WatchLMCore`; a future watch target will provide the concrete adapter.
+- [x] Run:
 
 ```sh
 swift test
