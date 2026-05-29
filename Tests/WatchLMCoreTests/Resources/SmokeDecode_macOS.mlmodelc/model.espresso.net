@@ -1,0 +1,65 @@
+{
+  "storage" : "model.espresso.weights",
+  "analyses" : {
+
+  },
+  "properties" : {
+
+  },
+  "format_version" : 200,
+  "metadata_in_weights" : [
+
+  ],
+  "layers" : [
+    {
+      "top" : "one",
+      "w" : 1,
+      "h" : 1,
+      "name" : "one",
+      "nd_rank" : 1,
+      "type" : "load_constant",
+      "k" : 1,
+      "bottom" : "",
+      "debug_info" : "one",
+      "n" : 1,
+      "weights" : {
+
+      },
+      "constant_blob" : 1
+    },
+    {
+      "bottom" : "token,one",
+      "alpha" : 1,
+      "operation" : 0,
+      "beta" : 0,
+      "weights" : {
+
+      },
+      "fused_relu" : 0,
+      "debug_info" : "increment_token",
+      "top" : "next_token",
+      "type" : "elementwise",
+      "name" : "increment_token",
+      "attributes" : {
+        "is_output" : 1
+      }
+    },
+    {
+      "bottom" : "kv_cache,token",
+      "alpha" : 1,
+      "operation" : 0,
+      "beta" : 0,
+      "weights" : {
+
+      },
+      "fused_relu" : 0,
+      "debug_info" : "append_to_cache",
+      "top" : "updated_kv_cache",
+      "type" : "elementwise",
+      "name" : "append_to_cache",
+      "attributes" : {
+        "is_output" : 1
+      }
+    }
+  ]
+}

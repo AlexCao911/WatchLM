@@ -15,10 +15,18 @@ let package = Package(
         .testTarget(
             name: "WatchLMCoreTests",
             dependencies: ["WatchLMCore"],
-            exclude: ["Resources/SmokeIdentity.mlmodel"],
+            exclude: [
+                "Resources/SmokeDecode.mlmodel",
+                "Resources/SmokeIdentity.mlmodel",
+                "Resources/SmokePrefill.mlmodel"
+            ],
             resources: [
+                .copy("Resources/SmokeDecode_macOS.mlmodelc"),
+                .copy("Resources/SmokeDecode_watchOS.mlmodelc"),
                 .copy("Resources/SmokeIdentity_macOS.mlmodelc"),
-                .copy("Resources/SmokeIdentity_watchOS.mlmodelc")
+                .copy("Resources/SmokeIdentity_watchOS.mlmodelc"),
+                .copy("Resources/SmokePrefill_macOS.mlmodelc"),
+                .copy("Resources/SmokePrefill_watchOS.mlmodelc")
             ]
         )
     ]

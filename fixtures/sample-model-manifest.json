@@ -43,7 +43,21 @@
     "storage": "application-support",
     "prefillPath": "Models/MiniCPM5/prefill-512.mlpackage",
     "decodePath": "Models/MiniCPM5/decode-512.mlpackage",
-    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "variants": {
+      "256": {
+        "deviceProfile": "watch-se-2",
+        "prefillPath": "Models/MiniCPM5/prefill-256.mlpackage",
+        "decodePath": "Models/MiniCPM5/decode-256.mlpackage",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "512": {
+        "deviceProfile": "watch-se-3",
+        "prefillPath": "Models/MiniCPM5/prefill-512.mlpackage",
+        "decodePath": "Models/MiniCPM5/decode-512.mlpackage",
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    }
   },
   "quantization": {
     "strategy": "mixed-precision-fidelity-first",

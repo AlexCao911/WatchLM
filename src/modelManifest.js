@@ -62,6 +62,29 @@ export function selectContextVariant(manifest, deviceProfile, requestedTokens) {
   return selected ?? variants[0];
 }
 
+export function selectModelArtifact(manifest, deviceProfile, requestedTokens) {
+  const contextVariant = selectContextVariant(manifest, deviceProfile, requestedTokens);
+  const variant = manifest.asset?.variants?.[String(contextVariant)];
+
+  if (variant) {
+    return {
+      contextVariant,
+      deviceProfile: variant.deviceProfile,
+      prefillPath: variant.prefillPath,
+      decodePath: variant.decodePath,
+      sha256: variant.sha256
+    };
+  }
+
+  return {
+    contextVariant,
+    deviceProfile,
+    prefillPath: manifest.asset.prefillPath,
+    decodePath: manifest.asset.decodePath,
+    sha256: manifest.asset.sha256
+  };
+}
+
 export function summarizeModelManifest(manifest) {
   assertValidModelManifest(manifest);
 
@@ -73,6 +96,7 @@ export function summarizeModelManifest(manifest) {
     ),
     contextVariants: [...manifest.contextVariants],
     assetStorage: manifest.asset.storage,
+    assetVariants: Object.keys(manifest.asset.variants ?? {}).map(Number).sort((left, right) => left - right),
     quantizationStrategy: manifest.quantization.strategy,
     kvCachePrecision: manifest.quantization.kvCache
   };
@@ -169,6 +193,45 @@ function validateAsset(manifest, errors) {
 
   if (typeof manifest.asset?.sha256 !== "string" || manifest.asset.sha256.length !== 64) {
     errors.push("asset.sha256 must be a 64-character hex digest");
+  }
+
+  validateAssetVariants(manifest, errors);
+}
+
+function validateAssetVariants(manifest, errors) {
+  const variants = manifest.asset?.variants;
+  if (variants === undefined) {
+    return;
+  }
+
+  if (!isRecord(variants)) {
+    errors.push("asset.variants must be an object when present");
+    return;
+  }
+
+  for (const profile of SUPPORTED_DEVICE_PROFILES) {
+    const contextVariant = manifest.deviceProfiles?.[profile]?.defaultContextVariant;
+    const variant = variants[String(contextVariant)];
+    if (!isRecord(variant)) {
+      errors.push(`asset.variants.${contextVariant} must be present for ${profile}`);
+      continue;
+    }
+
+    if (variant.deviceProfile !== profile) {
+      errors.push(`asset.variants.${contextVariant}.deviceProfile must be ${profile}`);
+    }
+
+    if (typeof variant.prefillPath !== "string" || !variant.prefillPath.endsWith(".mlpackage")) {
+      errors.push(`asset.variants.${contextVariant}.prefillPath must be an mlpackage path`);
+    }
+
+    if (typeof variant.decodePath !== "string" || !variant.decodePath.endsWith(".mlpackage")) {
+      errors.push(`asset.variants.${contextVariant}.decodePath must be an mlpackage path`);
+    }
+
+    if (typeof variant.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(variant.sha256)) {
+      errors.push(`asset.variants.${contextVariant}.sha256 must be a 64-character hex digest`);
+    }
   }
 }
 

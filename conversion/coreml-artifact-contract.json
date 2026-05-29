@@ -14,7 +14,21 @@
   "artifacts": {
     "prefillModelPath": "artifacts/coreml/watch-se-3/prefill-512.mlpackage",
     "decodeModelPath": "artifacts/coreml/watch-se-3/decode-512.mlpackage",
-    "entrypoints": ["prefill", "decode"]
+    "entrypoints": ["prefill", "decode"],
+    "deviceVariants": {
+      "watch-se-2": {
+        "contextVariant": 256,
+        "prefillModelPath": "artifacts/coreml/watch-se-2/prefill-256.mlpackage",
+        "decodeModelPath": "artifacts/coreml/watch-se-2/decode-256.mlpackage",
+        "maxNewTokens": 64
+      },
+      "watch-se-3": {
+        "contextVariant": 512,
+        "prefillModelPath": "artifacts/coreml/watch-se-3/prefill-512.mlpackage",
+        "decodeModelPath": "artifacts/coreml/watch-se-3/decode-512.mlpackage",
+        "maxNewTokens": 96
+      }
+    }
   },
   "contextVariant": 512,
   "quantizationPolicyId": "mixed-int4-ffn-int8-attn-kv",

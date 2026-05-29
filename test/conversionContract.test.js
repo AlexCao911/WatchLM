@@ -27,6 +27,23 @@ test("Core ML conversion contract declares split prefill and decode artifacts", 
   assert.ok([256, 512, 1024].includes(contract.contextVariant));
 });
 
+test("Core ML conversion contract has separate SE 2 and SE 3 quantized variants", async () => {
+  const contract = await readContract();
+
+  assert.deepEqual(Object.keys(contract.artifacts.deviceVariants).sort(), [
+    "watch-se-2",
+    "watch-se-3"
+  ]);
+  assert.equal(contract.artifacts.deviceVariants["watch-se-2"].contextVariant, 256);
+  assert.equal(contract.artifacts.deviceVariants["watch-se-3"].contextVariant, 512);
+
+  for (const variant of Object.values(contract.artifacts.deviceVariants)) {
+    assert.match(variant.prefillModelPath, /\.mlpackage$/);
+    assert.match(variant.decodeModelPath, /\.mlpackage$/);
+    assert.equal(typeof variant.maxNewTokens, "number");
+  }
+});
+
 test("Core ML conversion contract declares quantization and logits validation evidence", async () => {
   const contract = await readContract();
 

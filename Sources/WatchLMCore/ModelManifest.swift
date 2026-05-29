@@ -52,6 +52,22 @@ public struct ModelManifest: Codable, Equatable, Sendable {
             errors.append("asset.storage must not be app-bundle")
         }
 
+        if let variants = asset.variants {
+            for profile in DeviceProfile.allCases {
+                guard let defaultContextVariant = deviceProfiles[profile.rawValue]?.defaultContextVariant else {
+                    continue
+                }
+                guard let variant = variants[String(defaultContextVariant)] else {
+                    errors.append("asset.variants.\(defaultContextVariant) must be present for \(profile.rawValue)")
+                    continue
+                }
+
+                if variant.deviceProfile != profile.rawValue {
+                    errors.append("asset.variants.\(defaultContextVariant).deviceProfile must be \(profile.rawValue)")
+                }
+            }
+        }
+
         if quantization.strategy != "mixed-precision-fidelity-first" {
             errors.append("quantization.strategy must be mixed-precision-fidelity-first")
         }
@@ -65,6 +81,42 @@ public struct ModelManifest: Codable, Equatable, Sendable {
         }
 
         return errors
+    }
+
+    public func modelArtifact(
+        for deviceProfile: DeviceProfile,
+        requestedContextTokens: Int?
+    ) throws -> SelectedModelArtifact {
+        guard let profile = deviceProfiles[deviceProfile.rawValue] else {
+            throw InferenceRuntimeError.invalidInput(message: "Unsupported device profile \(deviceProfile.rawValue).")
+        }
+
+        let requested = requestedContextTokens ?? profile.defaultContextVariant
+        let sortedContextVariants = contextVariants.sorted()
+        guard let fallbackContext = sortedContextVariants.first else {
+            throw InferenceRuntimeError.invalidInput(message: "Manifest has no context variants.")
+        }
+        let selectedContext = sortedContextVariants
+            .filter { $0 <= requested }
+            .last ?? fallbackContext
+
+        if let variant = asset.variants?[String(selectedContext)] {
+            return SelectedModelArtifact(
+                contextVariant: selectedContext,
+                deviceProfile: variant.deviceProfile,
+                prefillPath: variant.prefillPath,
+                decodePath: variant.decodePath,
+                sha256: variant.sha256
+            )
+        }
+
+        return SelectedModelArtifact(
+            contextVariant: selectedContext,
+            deviceProfile: deviceProfile.rawValue,
+            prefillPath: asset.prefillPath,
+            decodePath: asset.decodePath,
+            sha256: asset.sha256
+        )
     }
 }
 
@@ -106,6 +158,22 @@ public struct DeviceProfileConfiguration: Codable, Equatable, Sendable {
 
 public struct AssetInfo: Codable, Equatable, Sendable {
     public var storage: String
+    public var prefillPath: String
+    public var decodePath: String
+    public var sha256: String
+    public var variants: [String: ModelArtifactVariant]?
+}
+
+public struct ModelArtifactVariant: Codable, Equatable, Sendable {
+    public var deviceProfile: String
+    public var prefillPath: String
+    public var decodePath: String
+    public var sha256: String
+}
+
+public struct SelectedModelArtifact: Codable, Equatable, Sendable {
+    public var contextVariant: Int
+    public var deviceProfile: String
     public var prefillPath: String
     public var decodePath: String
     public var sha256: String

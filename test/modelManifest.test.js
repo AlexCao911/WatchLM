@@ -11,6 +11,7 @@ import {
   SUPPORTED_CONTEXT_VARIANTS,
   assertValidModelManifest,
   selectContextVariant,
+  selectModelArtifact,
   summarizeModelManifest,
   validateModelManifest
 } from "../src/modelManifest.js";
@@ -104,6 +105,16 @@ test("model assets must stay outside the watch app bundle", () => {
   assert.match(result.errors.join("\n"), /asset\.storage must not be app-bundle/);
 });
 
+test("model assets must include SE 2 and SE 3 quantized variants", () => {
+  const manifest = clone(validManifest);
+  delete manifest.asset.variants["256"];
+
+  const result = validateModelManifest(manifest);
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /asset\.variants\.256 must be present for watch-se-2/);
+});
+
 test("quantization policy must be mixed precision with int8 KV cache", () => {
   const manifest = clone(validManifest);
   manifest.quantization.strategy = "uniform-int4";
@@ -126,6 +137,23 @@ test("selectContextVariant clamps to the largest supported variant that fits", (
   assert.equal(selectContextVariant(validManifest, "watch-se-2"), 256);
 });
 
+test("selectModelArtifact resolves SE 2 and SE 3 prefill/decode variants", () => {
+  assert.deepEqual(selectModelArtifact(validManifest, "watch-se-2"), {
+    contextVariant: 256,
+    deviceProfile: "watch-se-2",
+    prefillPath: "Models/MiniCPM5/prefill-256.mlpackage",
+    decodePath: "Models/MiniCPM5/decode-256.mlpackage",
+    sha256: "1111111111111111111111111111111111111111111111111111111111111111"
+  });
+  assert.deepEqual(selectModelArtifact(validManifest, "watch-se-3"), {
+    contextVariant: 512,
+    deviceProfile: "watch-se-3",
+    prefillPath: "Models/MiniCPM5/prefill-512.mlpackage",
+    decodePath: "Models/MiniCPM5/decode-512.mlpackage",
+    sha256: "2222222222222222222222222222222222222222222222222222222222222222"
+  });
+});
+
 test("assertValidModelManifest throws one combined validation error", () => {
   const manifest = clone(validManifest);
   manifest.model.id = "wrong";
@@ -146,6 +174,7 @@ test("summarizeModelManifest exposes audit-friendly details", () => {
     deviceProfiles: ["watch-se-2", "watch-se-3"],
     contextVariants: [256, 512, 1024],
     assetStorage: "application-support",
+    assetVariants: [256, 512],
     quantizationStrategy: "mixed-precision-fidelity-first",
     kvCachePrecision: "int8"
   });
