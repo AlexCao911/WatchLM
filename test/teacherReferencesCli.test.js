@@ -25,6 +25,8 @@ test("teacher reference CLI can emit a prompt-id keyed sidecar in mock mode", ()
       outputPath,
       "--prompt-limit",
       "2",
+      "--context-tokens",
+      "16",
       "--mock-token-ids",
       "10,11,12"
     ],
@@ -41,6 +43,7 @@ test("teacher reference CLI can emit a prompt-id keyed sidecar in mock mode", ()
   assert.equal(sidecar.schemaVersion, 1);
   assert.equal(sidecar.source, "mock-teacher");
   assert.equal(sidecar.modelId, "openbmb/MiniCPM5-1B");
+  assert.equal(sidecar.contextTokens, 16);
   assert.equal(sidecar.references.length, 2);
   assert.deepEqual(sidecar.references[0], {
     promptID: "zh-short-001",

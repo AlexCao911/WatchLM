@@ -56,6 +56,11 @@ def parse_args() -> argparse.Namespace:
         help="Optional cap applied to each prompt's maxNewTokens for smoke generation.",
     )
     parser.add_argument(
+        "--context-tokens",
+        type=int,
+        help="Optional runtime context window; teacher inputs are left-truncated to this token count.",
+    )
+    parser.add_argument(
         "--mock-token-ids",
         help="Comma-separated token IDs used for every prompt; avoids importing PyTorch/Transformers.",
     )
@@ -161,6 +166,10 @@ def generate_teacher_references(prompts: list[dict[str, Any]], args: argparse.Na
             return_tensors="pt",
             add_special_tokens=True,
         )
+        if args.context_tokens is not None:
+            if args.context_tokens <= 0:
+                raise ValueError("--context-tokens must be positive")
+            encoded = truncate_encoded_context(encoded, args.context_tokens)
         encoded = {name: tensor.to(device) for name, tensor in encoded.items()}
         prompt_token_count = int(encoded["input_ids"].shape[-1])
 
@@ -214,6 +223,7 @@ def build_sidecar(
         "modelId": args.model_id,
         "promptSuitePath": repo_relative_path(prompts_path),
         "promptCount": len(prompts),
+        "contextTokens": args.context_tokens,
         "maxNewTokensCap": args.max_new_tokens,
         "generatedAt": int(time.time()),
         "references": references,
@@ -225,6 +235,16 @@ def repo_relative_path(path: Path) -> str:
         return str(path.relative_to(ROOT))
     except ValueError:
         return str(path)
+
+
+def truncate_encoded_context(encoded: dict[str, Any], context_tokens: int) -> dict[str, Any]:
+    truncated: dict[str, Any] = {}
+    for name, tensor in encoded.items():
+        if hasattr(tensor, "shape") and len(tensor.shape) >= 2 and tensor.shape[-1] > context_tokens:
+            truncated[name] = tensor[..., -context_tokens:]
+        else:
+            truncated[name] = tensor
+    return truncated
 
 
 if __name__ == "__main__":
