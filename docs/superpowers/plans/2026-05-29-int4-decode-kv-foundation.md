@@ -724,9 +724,31 @@ swift test --filter runtimeBenchmarkCommandMergesTeacherSidecarAndWritesMockRepo
 
 Conclusion: the Swift CLI can now use one full teacher sidecar for batched/capped benchmark runs without distorting token agreement. This matters for slow host or watch runs because we can compare policies incrementally while preserving the same teacher corpus.
 
+## Task 38: Swift CLI Batch2 Policy Matrix
+
+- [x] Run context-16 global int8 through the Swift CLI with the full teacher sidecar, `--prompt-limit 2`, and `--max-new-tokens 2`.
+- [x] Run context-16 mixed FFN12 through the same capped/batched benchmark.
+- [x] Run context-16 mixed FFN10...13 through the same capped/batched benchmark.
+- [x] Run context-16 mixed FFN8...15 through the same capped/batched benchmark.
+- [x] Compare token agreement and generated token IDs for the first two shared benchmark prompts.
+
+Observed:
+
+```text
+policy       avg agreement  avg firstTokenMs  avg decode tok/s  peak RSS MB  zh-short-001 IDs  zh-short-002 IDs
+int8         1.00           5399.68           56.16             2754.25      [18487,45105]   [242,242]
+FFN12        1.00           5246.12           52.27             2592.22      [18487,45105]   [242,242]
+FFN10...13   0.75           5270.81           56.25             2977.73      [18487,45105]   [242,8464]
+FFN8...15    0.75           5301.63           52.67             2971.33      [18487,45105]   [242,8464]
+teacher prefix for zh-short-001: [18487,45105]
+teacher prefix for zh-short-002: [242,242]
+```
+
+Conclusion: the batched Swift CLI benchmark now detects prompt-sensitive drift that the one-prompt smoke missed. FFN12 still matches the int8 teacher prefix on the first two prompts, while the wider FFN10...13 and FFN8...15 policies diverge on the second prompt's second token. This makes FFN12 the safer current mixed frontier for any next context-size experiment, even though it does not shrink enough for SE2/SE3 deployment by itself.
+
 ## Next Work
 
-- Run int8, FFN12, FFN10...13, and FFN8...15 through capped or batched Swift prompt-suite benchmarks with the full teacher references.
+- Expand capped Swift CLI prompt batches beyond the first two prompts before promoting any mixed policy.
 - Validate slot-ring KV cache invariance against PyTorch/Core ML decode logits on real MiniCPM artifacts, then explore Core ML stateful cache or slice-view strategies if the graph/runtime supports them.
 - Expand Swift tokenizer parity tests across Chinese, English, code, tool tags, and chat-template edge cases.
 - Move from `context=16` to SE2 `context=256` and SE3 `context=512`.
