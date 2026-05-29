@@ -33,6 +33,14 @@ node tools/validation/watchlm-validate.js all \
   --report tools/benchmark/fixtures/sample-benchmark-report.json
 ```
 
+## Repository Layout
+
+Swift runtime code lives under `Sources/ModelRuntime`; the Swift package still exposes the product and target as `WatchLMCore` for API stability. Host-side JavaScript workflows live under `tools/`:
+
+- `tools/conversion`: Core ML conversion contracts and smoke model generation.
+- `tools/benchmark`: benchmark prompt/report schemas and fixtures.
+- `tools/validation`: model manifest validation and the local CLI.
+
 ## Artifact Policy
 
 Real `.mlpackage`, compiled `.mlmodelc`, GGUF, and checkpoint files are intentionally not committed. They will be generated or installed outside the main watchOS app bundle and represented in git by manifests, conversion contracts, and benchmark reports.
