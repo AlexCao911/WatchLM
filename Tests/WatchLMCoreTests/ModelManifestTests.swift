@@ -34,9 +34,17 @@ import Testing
     #expect(se2Artifact.contextVariant == 256)
     #expect(se2Artifact.prefillPath == "Models/MiniCPM5/prefill-256.mlpackage")
     #expect(se2Artifact.decodePath == "Models/MiniCPM5/decode-256.mlpackage")
+    #expect(se2Artifact.tokenizerPath == "Models/MiniCPM5/tokenizer.json")
+    #expect(se2Artifact.prefillSHA256 == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    #expect(se2Artifact.decodeSHA256 == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+    #expect(se2Artifact.tokenizerSHA256 == "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
     #expect(se3Artifact.contextVariant == 512)
     #expect(se3Artifact.prefillPath == "Models/MiniCPM5/prefill-512.mlpackage")
     #expect(se3Artifact.decodePath == "Models/MiniCPM5/decode-512.mlpackage")
+    #expect(se3Artifact.tokenizerPath == "Models/MiniCPM5/tokenizer.json")
+    #expect(se3Artifact.prefillSHA256 == "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+    #expect(se3Artifact.decodeSHA256 == "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+    #expect(se3Artifact.tokenizerSHA256 == "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
 }
 
 @Test func reportsManifestContractErrors() throws {

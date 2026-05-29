@@ -52,19 +52,31 @@ private let sampleManifestJSON = """
     "storage": "application-support",
     "prefillPath": "Models/MiniCPM5/prefill-512.mlpackage",
     "decodePath": "Models/MiniCPM5/decode-512.mlpackage",
+    "tokenizerPath": "Models/MiniCPM5/tokenizer.json",
     "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "prefillSHA256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "decodeSHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "tokenizerSHA256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "variants": {
       "256": {
         "deviceProfile": "watch-se-2",
         "prefillPath": "Models/MiniCPM5/prefill-256.mlpackage",
         "decodePath": "Models/MiniCPM5/decode-256.mlpackage",
-        "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+        "tokenizerPath": "Models/MiniCPM5/tokenizer.json",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "prefillSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "decodeSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "tokenizerSHA256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
       },
       "512": {
         "deviceProfile": "watch-se-3",
         "prefillPath": "Models/MiniCPM5/prefill-512.mlpackage",
         "decodePath": "Models/MiniCPM5/decode-512.mlpackage",
-        "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+        "tokenizerPath": "Models/MiniCPM5/tokenizer.json",
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "prefillSHA256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "decodeSHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "tokenizerSHA256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
       }
     }
   },

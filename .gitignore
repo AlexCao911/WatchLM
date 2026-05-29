@@ -1,4 +1,5 @@
 .build/
+.swiftpm/
 .venv/
 artifacts/**/*.mlpackage
 artifacts/**/*.mlmodelc

@@ -106,7 +106,11 @@ public struct ModelManifest: Codable, Equatable, Sendable {
                 deviceProfile: variant.deviceProfile,
                 prefillPath: variant.prefillPath,
                 decodePath: variant.decodePath,
-                sha256: variant.sha256
+                tokenizerPath: variant.tokenizerPath ?? asset.tokenizerPath,
+                sha256: variant.sha256,
+                prefillSHA256: variant.prefillSHA256,
+                decodeSHA256: variant.decodeSHA256,
+                tokenizerSHA256: variant.tokenizerSHA256 ?? asset.tokenizerSHA256
             )
         }
 
@@ -115,7 +119,11 @@ public struct ModelManifest: Codable, Equatable, Sendable {
             deviceProfile: deviceProfile.rawValue,
             prefillPath: asset.prefillPath,
             decodePath: asset.decodePath,
-            sha256: asset.sha256
+            tokenizerPath: asset.tokenizerPath,
+            sha256: asset.sha256,
+            prefillSHA256: asset.prefillSHA256,
+            decodeSHA256: asset.decodeSHA256,
+            tokenizerSHA256: asset.tokenizerSHA256
         )
     }
 }
@@ -160,7 +168,11 @@ public struct AssetInfo: Codable, Equatable, Sendable {
     public var storage: String
     public var prefillPath: String
     public var decodePath: String
+    public var tokenizerPath: String?
     public var sha256: String
+    public var prefillSHA256: String?
+    public var decodeSHA256: String?
+    public var tokenizerSHA256: String?
     public var variants: [String: ModelArtifactVariant]?
 }
 
@@ -168,7 +180,11 @@ public struct ModelArtifactVariant: Codable, Equatable, Sendable {
     public var deviceProfile: String
     public var prefillPath: String
     public var decodePath: String
+    public var tokenizerPath: String?
     public var sha256: String
+    public var prefillSHA256: String?
+    public var decodeSHA256: String?
+    public var tokenizerSHA256: String?
 }
 
 public struct SelectedModelArtifact: Codable, Equatable, Sendable {
@@ -176,7 +192,33 @@ public struct SelectedModelArtifact: Codable, Equatable, Sendable {
     public var deviceProfile: String
     public var prefillPath: String
     public var decodePath: String
+    public var tokenizerPath: String?
     public var sha256: String
+    public var prefillSHA256: String?
+    public var decodeSHA256: String?
+    public var tokenizerSHA256: String?
+
+    public init(
+        contextVariant: Int,
+        deviceProfile: String,
+        prefillPath: String,
+        decodePath: String,
+        tokenizerPath: String?,
+        sha256: String,
+        prefillSHA256: String?,
+        decodeSHA256: String?,
+        tokenizerSHA256: String?
+    ) {
+        self.contextVariant = contextVariant
+        self.deviceProfile = deviceProfile
+        self.prefillPath = prefillPath
+        self.decodePath = decodePath
+        self.tokenizerPath = tokenizerPath
+        self.sha256 = sha256
+        self.prefillSHA256 = prefillSHA256
+        self.decodeSHA256 = decodeSHA256
+        self.tokenizerSHA256 = tokenizerSHA256
+    }
 }
 
 public struct QuantizationInfo: Codable, Equatable, Sendable {

@@ -72,7 +72,11 @@ export function selectModelArtifact(manifest, deviceProfile, requestedTokens) {
       deviceProfile: variant.deviceProfile,
       prefillPath: variant.prefillPath,
       decodePath: variant.decodePath,
-      sha256: variant.sha256
+      tokenizerPath: variant.tokenizerPath ?? manifest.asset.tokenizerPath,
+      sha256: variant.sha256,
+      prefillSHA256: variant.prefillSHA256,
+      decodeSHA256: variant.decodeSHA256,
+      tokenizerSHA256: variant.tokenizerSHA256 ?? manifest.asset.tokenizerSHA256
     };
   }
 
@@ -81,7 +85,11 @@ export function selectModelArtifact(manifest, deviceProfile, requestedTokens) {
     deviceProfile,
     prefillPath: manifest.asset.prefillPath,
     decodePath: manifest.asset.decodePath,
-    sha256: manifest.asset.sha256
+    tokenizerPath: manifest.asset.tokenizerPath,
+    sha256: manifest.asset.sha256,
+    prefillSHA256: manifest.asset.prefillSHA256,
+    decodeSHA256: manifest.asset.decodeSHA256,
+    tokenizerSHA256: manifest.asset.tokenizerSHA256
   };
 }
 
@@ -195,6 +203,12 @@ function validateAsset(manifest, errors) {
     errors.push("asset.sha256 must be a 64-character hex digest");
   }
 
+  for (const field of ["prefillSHA256", "decodeSHA256", "tokenizerSHA256"]) {
+    if (field in (manifest.asset ?? {}) && !isSHA256(manifest.asset[field])) {
+      errors.push(`asset.${field} must be a 64-character hex digest`);
+    }
+  }
+
   validateAssetVariants(manifest, errors);
 }
 
@@ -231,6 +245,17 @@ function validateAssetVariants(manifest, errors) {
 
     if (typeof variant.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(variant.sha256)) {
       errors.push(`asset.variants.${contextVariant}.sha256 must be a 64-character hex digest`);
+    }
+
+    if (typeof (variant.tokenizerPath ?? manifest.asset?.tokenizerPath) !== "string") {
+      errors.push(`asset.variants.${contextVariant}.tokenizerPath must be present`);
+    }
+
+    for (const field of ["prefillSHA256", "decodeSHA256", "tokenizerSHA256"]) {
+      const value = variant[field] ?? manifest.asset?.[field];
+      if (!isSHA256(value)) {
+        errors.push(`asset.variants.${contextVariant}.${field} must be a 64-character hex digest`);
+      }
     }
   }
 }
@@ -269,4 +294,8 @@ function validateFallbackPolicy(manifest, warnings) {
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSHA256(value) {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 }
