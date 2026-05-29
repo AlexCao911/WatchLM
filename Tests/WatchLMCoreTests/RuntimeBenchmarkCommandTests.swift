@@ -16,8 +16,10 @@ import Testing
         schemaVersion: 1,
         source: "mock-teacher",
         references: selectedPrompts.map { prompt in
-            RuntimeBenchmarkPromptQualityReference(promptID: prompt.id, tokenIDs: [10, 11])
-        }
+            RuntimeBenchmarkPromptQualityReference(promptID: prompt.id, tokenIDs: [10, 11, 12])
+        } + [
+            RuntimeBenchmarkPromptQualityReference(promptID: "en-short-001", tokenIDs: [12, 13])
+        ]
     )
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

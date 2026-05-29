@@ -704,6 +704,26 @@ token lengths:
 
 Conclusion: broad teacher-token coverage now exists locally for the shared Swift benchmark prompt suite. Running the entire sidecar through context-16 Core ML on the macOS host would be slow at the current observed decode speed, so the practical next step is a capped/batched Swift CLI run for policy comparison, then context 256/512 conversion once the artifact size strategy is selected.
 
+## Task 37: Swift CLI Capped Teacher Reference Semantics
+
+- [x] Reproduce the full-sidecar + `--prompt-limit 2` failure where strict sidecar validation rejected references for prompts outside the selected batch.
+- [x] Add a regression test proving selected-prompt benchmarks can consume a full teacher sidecar.
+- [x] Filter teacher references to the selected prompt ids after applying prompt limit.
+- [x] Add a regression test proving `--max-new-tokens` capped benchmarks compare against the same capped teacher prefix.
+- [x] Truncate selected teacher token references to each prompt's effective `maxNewTokens` before running the benchmark.
+- [x] Re-run the real int8 context-16 batch2 CLI smoke with the full teacher sidecar.
+
+Observed:
+
+```text
+before fix: prompt-limit 2 failed because references for en/code/watch/safety prompts were treated as unknown ids
+after prompt filter: command ran, but averageTokenAgreement was 0.22 because 2 generated tokens were compared against 48/5-token references
+after reference cap: swift run WatchLMBenchmark ...int8... --teacher minicpm5-teacher-references-full.json --prompt-limit 2 --max-new-tokens 2 -> prompts 2/2, avg_token_agreement 1.0
+swift test --filter runtimeBenchmarkCommandMergesTeacherSidecarAndWritesMockReport: 1 test passed
+```
+
+Conclusion: the Swift CLI can now use one full teacher sidecar for batched/capped benchmark runs without distorting token agreement. This matters for slow host or watch runs because we can compare policies incrementally while preserving the same teacher corpus.
+
 ## Next Work
 
 - Run int8, FFN12, FFN10...13, and FFN8...15 through capped or batched Swift prompt-suite benchmarks with the full teacher references.

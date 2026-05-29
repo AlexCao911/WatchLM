@@ -206,8 +206,25 @@ public struct RuntimeBenchmarkCommand: Sendable {
 
         if let teacherReferencesURL = options.teacherReferencesURL {
             let references = try RuntimeBenchmarkQualityReferenceSuite.load(from: teacherReferencesURL)
+            let maxNewTokensByPromptID = Dictionary(uniqueKeysWithValues: suite.prompts.map { prompt in
+                (prompt.id, prompt.maxNewTokens)
+            })
+            let selectedReferences = RuntimeBenchmarkQualityReferenceSuite(
+                schemaVersion: references.schemaVersion,
+                source: references.source,
+                references: references.references.compactMap { reference in
+                    let promptID = reference.promptID.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard let maxNewTokens = maxNewTokensByPromptID[promptID] else {
+                        return nil
+                    }
+                    return RuntimeBenchmarkPromptQualityReference(
+                        promptID: reference.promptID,
+                        tokenIDs: Array(reference.tokenIDs.prefix(maxNewTokens))
+                    )
+                }
+            )
             suite = try suite.applyingQualityReferences(
-                references,
+                selectedReferences,
                 requireAllPrompts: options.requireAllReferences
             )
         }
