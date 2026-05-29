@@ -34,11 +34,32 @@
     "contextVariant": 16,
     "prefillModelPath": "artifacts/coreml/real-minicpm5-prefill-16/prefill-16.mlpackage",
     "prefillInt8ModelPath": "artifacts/coreml/real-minicpm5-prefill-16-int8/prefill-16-int8.mlpackage",
+    "prefillInt4ModelPath": "artifacts/coreml/real-minicpm5-prefill-16-int4/prefill-16-int4.mlpackage",
     "compiledWatchOSInt8Path": "artifacts/coreml/compiled-watchos-int8/prefill-16-int8.mlmodelc",
+    "compiledWatchOSInt4Path": "artifacts/coreml/compiled-watchos-int4/prefill-16-int4.mlmodelc",
     "fp16Bytes": 2161952910,
     "int8Bytes": 1082818930,
+    "int4Bytes": 541164434,
     "watchOSDeploymentTarget": "10.0",
-    "quantizationPolicyId": "coreml-linear-symmetric-int8"
+    "quantizationPolicyId": "coreml-linear-symmetric-int8-and-kmeans-int4",
+    "int4Validation": {
+      "maxAbsoluteError": 15.26953125,
+      "topKAgreement": 1,
+      "top1Matches": false,
+      "summary": "Full-model int4 palettization compiles for watchOS and cuts size to about 516MB, but it is not fidelity-safe on the local prompt."
+    },
+    "kvGraphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16/prefill-kv-16.mlpackage",
+      "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16/decode-16.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16/prefill-kv-16.mlmodelc",
+      "compiledWatchOSDecodePath": "artifacts/coreml/compiled-watchos-decode-16/decode-16.mlmodelc",
+      "decodeValidation": {
+        "logitsMaxAbsoluteError": 0.19140625,
+        "kvMaxAbsoluteError": 0.087890625,
+        "topKAgreement": 9,
+        "top1Matches": true
+      }
+    }
   },
   "contextVariant": 512,
   "quantizationPolicyId": "mixed-int4-ffn-int8-attn-kv",

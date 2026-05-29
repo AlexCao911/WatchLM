@@ -26,7 +26,12 @@ def main() -> None:
 
     tokenizer = conversion.load_tokenizer(snapshot_path)
     model = conversion.load_model(snapshot_path)
-    example_inputs = conversion.build_example_inputs(tokenizer, args.context_tokens, args.prompt)
+    input_ids, _, position_ids, causal_mask = conversion.build_prefill_tensors(
+        tokenizer,
+        args.context_tokens,
+        args.prompt,
+    )
+    example_inputs = (input_ids, position_ids, causal_mask)
 
     torch_logits, torch_seconds = run_torch(model, conversion, example_inputs)
     coreml_logits, coreml_seconds = run_coreml(Path(args.mlpackage).resolve(), example_inputs)

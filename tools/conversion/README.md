@@ -26,19 +26,53 @@ The current real-model spike converts a fixed `prefill-16` graph first. It inten
 
 ```sh
 .venv/bin/python tools/conversion/convert-minicpm5-coreml.py \
+  --graph prefill \
   --context-tokens 16 \
   --output-dir artifacts/coreml/real-minicpm5-prefill-16 \
-  --compute-precision float16
+  --compute-precision float16 \
+  --compression none
 ```
 
 Generate the int8 Core ML package:
 
 ```sh
 .venv/bin/python tools/conversion/convert-minicpm5-coreml.py \
+  --graph prefill \
   --context-tokens 16 \
   --output-dir artifacts/coreml/real-minicpm5-prefill-16-int8 \
   --compute-precision float16 \
-  --quantize
+  --compression int8
+```
+
+Generate the full-model int4 Core ML package:
+
+```sh
+.venv/bin/python tools/conversion/convert-minicpm5-coreml.py \
+  --graph prefill \
+  --context-tokens 16 \
+  --output-dir artifacts/coreml/real-minicpm5-prefill-16-int4 \
+  --compute-precision float16 \
+  --compression int4
+```
+
+The first full-model int4 package compiled for watchOS and reduced the package to about 516MB, but the single-prompt logits check did not preserve top-1. Treat it as a compression proof, not as the production fidelity policy.
+
+Generate prefill and decode graphs with explicit KV cache IO:
+
+```sh
+.venv/bin/python tools/conversion/convert-minicpm5-coreml.py \
+  --graph prefill-kv \
+  --context-tokens 16 \
+  --output-dir artifacts/coreml/real-minicpm5-prefill-kv-16 \
+  --compute-precision float16 \
+  --compression none
+
+.venv/bin/python tools/conversion/convert-minicpm5-coreml.py \
+  --graph decode \
+  --context-tokens 16 \
+  --output-dir artifacts/coreml/real-minicpm5-decode-16 \
+  --compute-precision float16 \
+  --compression none
 ```
 
 Compile the quantized package for watchOS:
@@ -60,4 +94,14 @@ TMPDIR="$PWD/artifacts/tmp" \
   --mlpackage artifacts/coreml/real-minicpm5-prefill-16-int8/prefill-16-int8.mlpackage \
   --context-tokens 16 \
   --report artifacts/coreml/real-minicpm5-prefill-16-int8/logits-validation.json
+```
+
+Validate decode logits and one-token KV outputs against the PyTorch teacher:
+
+```sh
+TMPDIR="$PWD/artifacts/tmp" \
+  .venv/bin/python tools/validation/validate-coreml-decode.py \
+  --mlpackage artifacts/coreml/real-minicpm5-decode-16/decode-16.mlpackage \
+  --context-tokens 16 \
+  --report artifacts/coreml/real-minicpm5-decode-16/decode-validation.json
 ```
