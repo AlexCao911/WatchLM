@@ -3,7 +3,7 @@ import {
   EXPECTED_RUNTIME,
   SUPPORTED_CONTEXT_VARIANTS,
   SUPPORTED_DEVICE_PROFILES
-} from "./modelManifest.js";
+} from "../validation/modelManifest.js";
 
 export const DEVICE_TARGETS = Object.freeze({
   "watch-se-2": Object.freeze({

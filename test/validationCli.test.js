@@ -8,10 +8,28 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, "..");
-const cliPath = path.join(repoRoot, "bin", "watchlm-validate.js");
-const manifestPath = path.join(repoRoot, "fixtures", "sample-model-manifest.json");
-const promptsPath = path.join(repoRoot, "fixtures", "benchmark-prompts.json");
-const reportPath = path.join(repoRoot, "fixtures", "sample-benchmark-report.json");
+const cliPath = path.join(repoRoot, "tools", "validation", "watchlm-validate.js");
+const manifestPath = path.join(
+  repoRoot,
+  "tools",
+  "validation",
+  "fixtures",
+  "sample-model-manifest.json"
+);
+const promptsPath = path.join(
+  repoRoot,
+  "tools",
+  "benchmark",
+  "fixtures",
+  "benchmark-prompts.json"
+);
+const reportPath = path.join(
+  repoRoot,
+  "tools",
+  "benchmark",
+  "fixtures",
+  "sample-benchmark-report.json"
+);
 
 function runCli(args) {
   return spawnSync(process.execPath, [cliPath, ...args], {

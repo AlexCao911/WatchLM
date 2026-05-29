@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
 
-import { loadBenchmarkPrompts } from "../src/benchmarkPrompts.js";
-import { summarizeBenchmarkReport, validateBenchmarkReport } from "../src/benchmarkReport.js";
-import { assertValidModelManifest, summarizeModelManifest } from "../src/modelManifest.js";
+import { loadBenchmarkPrompts } from "../benchmark/benchmarkPrompts.js";
+import { summarizeBenchmarkReport, validateBenchmarkReport } from "../benchmark/benchmarkReport.js";
+import { assertValidModelManifest, summarizeModelManifest } from "./modelManifest.js";
 
 async function main(argv) {
   const [command, ...args] = argv;

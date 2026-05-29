@@ -14,10 +14,17 @@ import {
   selectModelArtifact,
   summarizeModelManifest,
   validateModelManifest
-} from "../src/modelManifest.js";
+} from "../tools/validation/modelManifest.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const fixturePath = path.join(__dirname, "..", "fixtures", "sample-model-manifest.json");
+const fixturePath = path.join(
+  __dirname,
+  "..",
+  "tools",
+  "validation",
+  "fixtures",
+  "sample-model-manifest.json"
+);
 const validManifest = JSON.parse(await readFile(fixturePath, "utf8"));
 
 function clone(value) {

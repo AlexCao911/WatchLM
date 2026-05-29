@@ -10,10 +10,17 @@ import {
   requiresFallbackEvidence,
   summarizeBenchmarkReport,
   validateBenchmarkReport
-} from "../src/benchmarkReport.js";
+} from "../tools/benchmark/benchmarkReport.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const fixturePath = path.join(__dirname, "..", "fixtures", "sample-benchmark-report.json");
+const fixturePath = path.join(
+  __dirname,
+  "..",
+  "tools",
+  "benchmark",
+  "fixtures",
+  "sample-benchmark-report.json"
+);
 const fixture = JSON.parse(await readFile(fixturePath, "utf8"));
 const [se2Report, se3Report] = fixture.reports;
 

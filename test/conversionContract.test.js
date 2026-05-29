@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, "..");
-const contractPath = path.join(repoRoot, "conversion", "coreml-artifact-contract.json");
+const contractPath = path.join(repoRoot, "tools", "conversion", "coreml-artifact-contract.json");
 const gitignorePath = path.join(repoRoot, ".gitignore");
 
 test("Core ML conversion contract declares source checkpoint and tokenizer identity", async () => {

@@ -11,7 +11,7 @@ let package = Package(
         .library(name: "WatchLMCore", targets: ["WatchLMCore"])
     ],
     targets: [
-        .target(name: "WatchLMCore"),
+        .target(name: "WatchLMCore", path: "Sources/ModelRuntime"),
         .testTarget(
             name: "WatchLMCoreTests",
             dependencies: ["WatchLMCore"],

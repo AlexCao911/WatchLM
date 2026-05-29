@@ -54,12 +54,13 @@ This document maps the user goal and architecture decisions to concrete delivera
 | Area | Evidence |
 | --- | --- |
 | Implementation plan | `docs/superpowers/plans/2026-05-29-watch-se-minicpm-implementation.md` |
-| Host manifest contract | `src/modelManifest.js`, `fixtures/sample-model-manifest.json`, `test/modelManifest.test.js` |
-| Benchmark prompts | `src/benchmarkPrompts.js`, `fixtures/benchmark-prompts.json`, `test/benchmarkPrompts.test.js` |
-| Benchmark report gates | `src/benchmarkReport.js`, `fixtures/sample-benchmark-report.json`, `test/benchmarkReport.test.js` |
-| Local validation CLI | `bin/watchlm-validate.js`, `test/validationCli.test.js` |
-| Swift runtime contracts | `Sources/WatchLMCore`, `Tests/WatchLMCoreTests` |
-| Conversion artifact contract | `conversion/coreml-artifact-contract.json`, `conversion/README.md`, `test/conversionContract.test.js` |
+| Architecture refactor plan | `docs/superpowers/plans/2026-05-29-modelruntime-architecture-refactor.md` |
+| Host manifest contract | `tools/validation/modelManifest.js`, `tools/validation/fixtures/sample-model-manifest.json`, `test/modelManifest.test.js` |
+| Benchmark prompts | `tools/benchmark/benchmarkPrompts.js`, `tools/benchmark/fixtures/benchmark-prompts.json`, `test/benchmarkPrompts.test.js` |
+| Benchmark report gates | `tools/benchmark/benchmarkReport.js`, `tools/benchmark/fixtures/sample-benchmark-report.json`, `test/benchmarkReport.test.js` |
+| Local validation CLI | `tools/validation/watchlm-validate.js`, `test/validationCli.test.js` |
+| Swift runtime contracts | `Sources/ModelRuntime`, `Tests/WatchLMCoreTests` |
+| Conversion artifact contract | `tools/conversion/coreml-artifact-contract.json`, `tools/conversion/README.md`, `test/conversionContract.test.js` |
 | Watch app shell checkpoint | `docs/watch-app-shell.md` |
 
 ## Completion Evidence Checklist

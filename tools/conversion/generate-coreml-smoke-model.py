@@ -10,7 +10,7 @@ from coremltools.models import datatypes
 from coremltools.models.neural_network import NeuralNetworkBuilder
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 RESOURCES = ROOT / "Tests" / "WatchLMCoreTests" / "Resources"
 SOURCE_MODEL = RESOURCES / "SmokeIdentity.mlmodel"
 SOURCE_PREFILL_MODEL = RESOURCES / "SmokePrefill.mlmodel"

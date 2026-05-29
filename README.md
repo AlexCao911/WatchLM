@@ -19,18 +19,18 @@ node --test
 Validate individual evidence files:
 
 ```sh
-node bin/watchlm-validate.js manifest fixtures/sample-model-manifest.json
-node bin/watchlm-validate.js prompts fixtures/benchmark-prompts.json
-node bin/watchlm-validate.js report fixtures/sample-benchmark-report.json
+node tools/validation/watchlm-validate.js manifest tools/validation/fixtures/sample-model-manifest.json
+node tools/validation/watchlm-validate.js prompts tools/benchmark/fixtures/benchmark-prompts.json
+node tools/validation/watchlm-validate.js report tools/benchmark/fixtures/sample-benchmark-report.json
 ```
 
 Validate all host-side contracts:
 
 ```sh
-node bin/watchlm-validate.js all \
-  --manifest fixtures/sample-model-manifest.json \
-  --prompts fixtures/benchmark-prompts.json \
-  --report fixtures/sample-benchmark-report.json
+node tools/validation/watchlm-validate.js all \
+  --manifest tools/validation/fixtures/sample-model-manifest.json \
+  --prompts tools/benchmark/fixtures/benchmark-prompts.json \
+  --report tools/benchmark/fixtures/sample-benchmark-report.json
 ```
 
 ## Artifact Policy

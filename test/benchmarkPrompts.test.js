@@ -9,10 +9,17 @@ import {
   groupPromptsByCategory,
   loadBenchmarkPrompts,
   validateBenchmarkPrompts
-} from "../src/benchmarkPrompts.js";
+} from "../tools/benchmark/benchmarkPrompts.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const fixturePath = path.join(__dirname, "..", "fixtures", "benchmark-prompts.json");
+const fixturePath = path.join(
+  __dirname,
+  "..",
+  "tools",
+  "benchmark",
+  "fixtures",
+  "benchmark-prompts.json"
+);
 
 test("required prompt categories cover fidelity and watch utility probes", () => {
   assert.deepEqual(REQUIRED_PROMPT_CATEGORIES, [
