@@ -25,6 +25,8 @@ public struct InferenceResult: Codable, Equatable, Sendable {
 public enum InferenceRuntimeError: Error, Codable, Equatable, Sendable {
     case modelAssetMissing
     case cancelled(partialTokens: [String])
+    case invalidInput(message: String)
+    case predictionFailed(message: String)
     case unavailableRuntime(reason: String)
 
     public var userMessage: String {
@@ -33,6 +35,10 @@ public enum InferenceRuntimeError: Error, Codable, Equatable, Sendable {
             "Model asset is not installed."
         case .cancelled:
             "Generation was cancelled."
+        case .invalidInput(let message):
+            "Invalid input: \(message)"
+        case .predictionFailed(let message):
+            "Prediction failed: \(message)"
         case .unavailableRuntime(let reason):
             "Runtime unavailable: \(reason)"
         }

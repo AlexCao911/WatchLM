@@ -14,7 +14,12 @@ let package = Package(
         .target(name: "WatchLMCore"),
         .testTarget(
             name: "WatchLMCoreTests",
-            dependencies: ["WatchLMCore"]
+            dependencies: ["WatchLMCore"],
+            exclude: ["Resources/SmokeIdentity.mlmodel"],
+            resources: [
+                .copy("Resources/SmokeIdentity_macOS.mlmodelc"),
+                .copy("Resources/SmokeIdentity_watchOS.mlmodelc")
+            ]
         )
     ]
 )

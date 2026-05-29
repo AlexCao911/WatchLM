@@ -1,4 +1,5 @@
 .build/
+.venv/
 artifacts/**/*.mlpackage
 artifacts/**/*.mlmodelc
 artifacts/**/*.gguf
