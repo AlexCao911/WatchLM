@@ -1,8 +1,11 @@
 .build/
 .swiftpm/
 .venv/
+__pycache__/
 artifacts/**/*.mlpackage
 artifacts/**/*.mlmodelc
 artifacts/**/*.gguf
 artifacts/**/*.safetensors
 artifacts/benchmarks/**/*.json
+artifacts/hf/
+artifacts/coreml/

@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "sourceCheckpoint": {
     "id": "openbmb/MiniCPM5-1B",
-    "revision": "design-contract",
+    "revision": "4e9de7a0778dc1c362e983e6858f0e77542cbdca",
     "sha256": null
   },
   "tokenizer": {
     "source": "openbmb/MiniCPM5-1B",
-    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "sha256": "3e065a558a034185fe299917b398685c1facd0169a9eea1e629eb30c171fed81",
     "chatTemplate": "minicpm5-no-think",
     "vocabularyPreserved": true
   },
@@ -30,13 +30,23 @@
       }
     }
   },
+  "realConversionSpike": {
+    "contextVariant": 16,
+    "prefillModelPath": "artifacts/coreml/real-minicpm5-prefill-16/prefill-16.mlpackage",
+    "prefillInt8ModelPath": "artifacts/coreml/real-minicpm5-prefill-16-int8/prefill-16-int8.mlpackage",
+    "compiledWatchOSInt8Path": "artifacts/coreml/compiled-watchos-int8/prefill-16-int8.mlmodelc",
+    "fp16Bytes": 2161952910,
+    "int8Bytes": 1082818930,
+    "watchOSDeploymentTarget": "10.0",
+    "quantizationPolicyId": "coreml-linear-symmetric-int8"
+  },
   "contextVariant": 512,
   "quantizationPolicyId": "mixed-int4-ffn-int8-attn-kv",
   "logitsValidation": {
     "teacherModelId": "openbmb/MiniCPM5-1B",
-    "maxAbsoluteError": 0,
-    "topKAgreement": 0,
-    "summary": "Populate with BF16 teacher comparison metrics when a real Core ML artifact is generated."
+    "maxAbsoluteError": 0.6669921875,
+    "topKAgreement": 10,
+    "summary": "Real prefill-16 int8 Core ML spike matched PyTorch top-1 and top-10 on the local inference prompt; mean absolute error was 0.12139997631311417."
   },
   "excludedLargeArtifactPaths": [
     "artifacts/**/*.mlpackage",
