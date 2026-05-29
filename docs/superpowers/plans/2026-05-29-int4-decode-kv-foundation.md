@@ -633,6 +633,27 @@ sidecar path: artifacts/benchmarks/minicpm5-teacher-references-smoke.json
 
 Conclusion: the Swift benchmark sidecar no longer has to be hand-authored. We now have a repeatable host tool that can generate teacher references for the shared prompt suite, which is the missing bridge before comparing int8, FFN12, FFN10...13, and FFN8...15 under one benchmark contract.
 
+## Task 34: Swift Benchmark CLI
+
+- [x] Add a Swift `WatchLMBenchmark` executable target plus `WatchLMBenchmarkSupport` command layer.
+- [x] Load the shared prompt suite, optional teacher reference sidecar, prompt limit, and max-new-token cap from command-line arguments.
+- [x] Run either a mock streaming runtime or a real Core ML MiniCPM explicit-KV runtime from the same command path.
+- [x] Write `RuntimeBenchmarkReport` JSON with timing, token IDs, quality drift, telemetry, artifact size, and selected device/context metadata.
+- [x] Verify the command layer through a Swift test and a real context-16 int8 Core ML CLI smoke run.
+
+Observed:
+
+```text
+red test: WatchLMBenchmarkSupport target and RuntimeBenchmarkCommand did not exist
+swift test --filter runtimeBenchmarkCommandMergesTeacherSidecarAndWritesMockReport: 1 test passed
+swift run WatchLMBenchmark --runtime mock ...: prompts 1/1, avg_token_agreement 1.0
+swift run WatchLMBenchmark --runtime coreml ...context16 int8...: prompts 1/1, avg_token_agreement 1.0
+real int8 CLI smoke generated token IDs [18487, 45105] and text "限制回复"
+real int8 CLI smoke loadMs 16326.848, firstTokenMs 10900.471, decode 0.11 tokens/s, peak resident memory 1710.89MB on macOS host
+```
+
+Conclusion: benchmark execution is now a first-class Swift path instead of being trapped inside tests. This makes the next optimization loop cleaner: generate a teacher sidecar, run each Core ML artifact policy through the same Swift CLI, then compare size, latency, memory, and token agreement before deciding which policy is worth taking to SE2/SE3 hardware.
+
 ## Next Work
 
 - Generate full-length PyTorch teacher token sidecars for the shared prompt suite.

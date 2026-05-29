@@ -8,13 +8,22 @@ let package = Package(
         .watchOS(.v10)
     ],
     products: [
-        .library(name: "WatchLMCore", targets: ["WatchLMCore"])
+        .library(name: "WatchLMCore", targets: ["WatchLMCore"]),
+        .executable(name: "WatchLMBenchmark", targets: ["WatchLMBenchmark"])
     ],
     targets: [
         .target(name: "WatchLMCore", path: "Sources/ModelRuntime"),
+        .target(
+            name: "WatchLMBenchmarkSupport",
+            dependencies: ["WatchLMCore"]
+        ),
+        .executableTarget(
+            name: "WatchLMBenchmark",
+            dependencies: ["WatchLMBenchmarkSupport"]
+        ),
         .testTarget(
             name: "WatchLMCoreTests",
-            dependencies: ["WatchLMCore"],
+            dependencies: ["WatchLMCore", "WatchLMBenchmarkSupport"],
             exclude: [
                 "Resources/SmokeDecode.mlmodel",
                 "Resources/SmokeIdentity.mlmodel",
