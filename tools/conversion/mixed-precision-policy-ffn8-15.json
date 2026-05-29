@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "policyId": "mixed-int4-ffn8-15-int8-rest",
+  "strategy": "mixed-precision-fidelity-first",
+  "layerCount": 24,
+  "protectedEdgeLayerCount": 2,
+  "weights": {
+    "embedding": "int8",
+    "lmHead": "int8",
+    "norms": "fp16",
+    "attentionQKO": "int8",
+    "attentionV": "int8",
+    "ffn": "int8"
+  },
+  "layerOverrides": {
+    "ffn": {
+      "8": "int4",
+      "9": "int4",
+      "10": "int4",
+      "11": "int4",
+      "12": "int4",
+      "13": "int4",
+      "14": "int4",
+      "15": "int4"
+    }
+  },
+  "kvCache": "int8",
+  "structuralReduction": false,
+  "opNamePatterns": {
+    "embedding": [
+      "embed_tokens",
+      "tok_embeddings",
+      "embedding"
+    ],
+    "lmHead": [
+      "lm_head",
+      "output_projection"
+    ],
+    "norms": [
+      "input_layernorm",
+      "post_attention_layernorm",
+      "norm"
+    ],
+    "attentionQKO": [
+      "self_attn.q_proj",
+      "self_attn.k_proj",
+      "self_attn.o_proj",
+      "attention.wq",
+      "attention.wk",
+      "attention.wo"
+    ],
+    "attentionV": [
+      "self_attn.v_proj",
+      "attention.wv"
+    ],
+    "ffn": [
+      "mlp.gate_proj",
+      "mlp.up_proj",
+      "mlp.down_proj",
+      "feed_forward",
+      "ffn"
+    ]
+  }
+}

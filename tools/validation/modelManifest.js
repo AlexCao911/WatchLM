@@ -1,7 +1,36 @@
 export const SUPPORTED_CONTEXT_VARIANTS = Object.freeze([256, 512, 1024]);
 export const SUPPORTED_DEVICE_PROFILES = Object.freeze(["watch-se-2", "watch-se-3"]);
+export const SUPPORTED_KV_CACHE_MODES = Object.freeze([
+  "stateful-preferred",
+  "slot-ring",
+  "contiguous-sliding"
+]);
 export const EXPECTED_MODEL_ID = "openbmb/MiniCPM5-1B";
 export const EXPECTED_RUNTIME = "coreml-mlprogram";
+export const EXPECTED_GRAPH_SCHEMA = Object.freeze({
+  interface: "logits-layered-kv",
+  layerCount: 24,
+  kvHeads: 2,
+  headDimension: 128,
+  prefill: Object.freeze({
+    inputIDs: "input_ids",
+    positionIDs: "position_ids",
+    causalMask: "causal_mask",
+    logits: "logits",
+    keyPrefix: "present_key_",
+    valuePrefix: "present_value_"
+  }),
+  decode: Object.freeze({
+    tokenID: "token_id",
+    positionID: "position_id",
+    causalMask: "causal_mask",
+    logits: "logits",
+    pastKeyPrefix: "past_key_",
+    pastValuePrefix: "past_value_",
+    newKeyPrefix: "new_key_",
+    newValuePrefix: "new_value_"
+  })
+});
 export const EXPECTED_ARCHITECTURE = Object.freeze({
   layers: 24,
   hiddenSize: 1536,
@@ -105,6 +134,7 @@ export function summarizeModelManifest(manifest) {
     contextVariants: [...manifest.contextVariants],
     assetStorage: manifest.asset.storage,
     assetVariants: Object.keys(manifest.asset.variants ?? {}).map(Number).sort((left, right) => left - right),
+    kvCacheMode: manifest.runtime.kvCacheMode,
     quantizationStrategy: manifest.quantization.strategy,
     kvCachePrecision: manifest.quantization.kvCache
   };
@@ -124,6 +154,46 @@ function validateRuntime(manifest, errors) {
   const entrypoints = manifest.runtime?.entrypoints;
   if (!Array.isArray(entrypoints) || !entrypoints.includes("prefill") || !entrypoints.includes("decode")) {
     errors.push("runtime.entrypoints must include prefill and decode");
+  }
+
+  if (!SUPPORTED_KV_CACHE_MODES.includes(manifest.runtime?.kvCacheMode)) {
+    errors.push("runtime.kvCacheMode must be stateful-preferred, slot-ring, or contiguous-sliding");
+  }
+
+  validateRuntimeGraphSchema(manifest.runtime?.graphSchema, errors);
+}
+
+function validateRuntimeGraphSchema(graphSchema, errors) {
+  if (!isRecord(graphSchema)) {
+    errors.push("runtime.graphSchema must describe Core ML prefill/decode IO");
+    return;
+  }
+
+  for (const [field, expected] of Object.entries({
+    interface: EXPECTED_GRAPH_SCHEMA.interface,
+    layerCount: EXPECTED_GRAPH_SCHEMA.layerCount,
+    kvHeads: EXPECTED_GRAPH_SCHEMA.kvHeads,
+    headDimension: EXPECTED_GRAPH_SCHEMA.headDimension
+  })) {
+    if (graphSchema[field] !== expected) {
+      errors.push(`runtime.graphSchema.${field} must be ${expected}`);
+    }
+  }
+
+  validateNamedSchema("runtime.graphSchema.prefill", graphSchema.prefill, EXPECTED_GRAPH_SCHEMA.prefill, errors);
+  validateNamedSchema("runtime.graphSchema.decode", graphSchema.decode, EXPECTED_GRAPH_SCHEMA.decode, errors);
+}
+
+function validateNamedSchema(path, schema, expectedSchema, errors) {
+  if (!isRecord(schema)) {
+    errors.push(`${path} must be an object`);
+    return;
+  }
+
+  for (const [field, expected] of Object.entries(expectedSchema)) {
+    if (schema[field] !== expected) {
+      errors.push(`${path}.${field} must be ${expected}`);
+    }
   }
 }
 

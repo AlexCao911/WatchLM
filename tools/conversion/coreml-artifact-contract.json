@@ -59,6 +59,147 @@
         "topKAgreement": 9,
         "top1Matches": true
       }
+    },
+    "kvInt8Graphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-int8/prefill-kv-16-int8.mlpackage",
+      "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16-int8/decode-16-int8.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16-int8/prefill-kv-16-int8.mlmodelc",
+      "compiledWatchOSDecodePath": "artifacts/coreml/compiled-watchos-decode-16-int8/decode-16-int8.mlmodelc",
+      "prefillKVBytes": 1082836862,
+      "decodeBytes": 1082902834,
+      "prefillValidation": {
+        "maxAbsoluteError": 0.6669921875,
+        "topKAgreement": 10,
+        "top1Matches": true
+      },
+      "decodeValidation": {
+        "logitsMaxAbsoluteError": 0.474609375,
+        "kvMaxAbsoluteError": 0.1640625,
+        "topKAgreement": 9,
+        "top1Matches": true
+      }
+    },
+    "kvMixedGraphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-mixed/prefill-kv-16-mixed.mlpackage",
+      "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16-mixed/decode-16-mixed.mlpackage",
+      "prefillKVBytes": 870070355,
+      "decodeBytes": 870136324,
+      "quantizationPolicyId": "mixed-int4-ffn-int8-attn-kv",
+      "selectorAudit": {
+        "int8SelectedOps": 110,
+        "int4SelectedOps": 60,
+        "int4SelectedComponent": "ffn",
+        "int4SelectedLayers": "2...21"
+      },
+      "prefillValidation": {
+        "maxAbsoluteError": 16.859375,
+        "topKAgreement": 2,
+        "top1Matches": false
+      },
+      "decodeValidation": {
+        "logitsMaxAbsoluteError": 9.556640625,
+        "kvMaxAbsoluteError": 3.11376953125,
+        "topKAgreement": 4,
+        "top1Matches": false
+      },
+      "summary": "Selective mixed compression works mechanically and shrinks each context-16 graph to about 830MB, but the current middle-FFN int4 policy is not fidelity-safe."
+    },
+    "kvMixedFFN12Graphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-mixed-ffn12/prefill-kv-16-mixed.mlpackage",
+      "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16-mixed-ffn12/decode-16-mixed.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16-mixed-ffn12/prefill-kv-16-mixed.mlmodelc",
+      "compiledWatchOSDecodePath": "artifacts/coreml/compiled-watchos-decode-16-mixed-ffn12/decode-16-mixed.mlmodelc",
+      "prefillKVBytes": 1072199140,
+      "decodeBytes": 1072265112,
+      "quantizationPolicyId": "mixed-int4-ffn12-int8-rest",
+      "selectorAudit": {
+        "int8SelectedOps": 167,
+        "int4SelectedOps": 3,
+        "int4SelectedComponent": "ffn",
+        "int4SelectedLayers": "12"
+      },
+      "prefillValidation": {
+        "maxAbsoluteError": 0.9697265625,
+        "topKAgreement": 10,
+        "top1Matches": true
+      },
+      "decodeValidation": {
+        "logitsMaxAbsoluteError": 0.890625,
+        "kvMaxAbsoluteError": 0.3828125,
+        "topKAgreement": 9,
+        "top1Matches": true
+      },
+      "summary": "Layer-specific mixed compression with only layer 12 FFN at int4 preserves context-16 top-1 and top-10 agreement while compiling for watchOS, but the size reduction versus int8 is small."
+    },
+    "kvMixedFFN1013Graphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-mixed-ffn10-13/prefill-kv-16-mixed.mlpackage",
+      "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16-mixed-ffn10-13/decode-16-mixed.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16-mixed-ffn10-13/prefill-kv-16-mixed.mlmodelc",
+      "compiledWatchOSDecodePath": "artifacts/coreml/compiled-watchos-decode-16-mixed-ffn10-13/decode-16-mixed.mlmodelc",
+      "prefillKVBytes": 1040284069,
+      "decodeBytes": 1040350041,
+      "quantizationPolicyId": "mixed-int4-ffn10-13-int8-rest",
+      "selectorAudit": {
+        "int8SelectedOps": 158,
+        "int4SelectedOps": 12,
+        "int4SelectedComponent": "ffn",
+        "int4SelectedLayers": "10...13"
+      },
+      "prefillValidation": {
+        "maxAbsoluteError": 1.82421875,
+        "meanAbsoluteError": 0.275522381067276,
+        "topKAgreement": 9,
+        "top1Matches": true
+      },
+      "decodeValidation": {
+        "logitsMaxAbsoluteError": 1.51470947265625,
+        "logitsMeanAbsoluteError": 0.22385700047016144,
+        "kvMaxAbsoluteError": 0.96533203125,
+        "topKAgreement": 9,
+        "top1Matches": true
+      },
+      "swiftBenchmark": {
+        "configurationId": "real-minicpm5-context16-mixed-ffn10-13-local",
+        "generatedTokenIds": [242, 38],
+        "averageTokenAgreement": 1.0
+      },
+      "summary": "Widening the FFN int4 override to layers 10...13 preserves context-16 top-1 on the local prompt and compiles for watchOS, with a larger size win than FFN12 but higher logits/KV drift."
+    },
+    "kvMixedFFN815Graphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-mixed-ffn8-15/prefill-kv-16-mixed.mlpackage",
+      "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16-mixed-ffn8-15/decode-16-mixed.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16-mixed-ffn8-15/prefill-kv-16-mixed.mlmodelc",
+      "compiledWatchOSDecodePath": "artifacts/coreml/compiled-watchos-decode-16-mixed-ffn8-15/decode-16-mixed.mlmodelc",
+      "prefillKVBytes": 997730641,
+      "decodeBytes": 997796613,
+      "quantizationPolicyId": "mixed-int4-ffn8-15-int8-rest",
+      "selectorAudit": {
+        "int8SelectedOps": 146,
+        "int4SelectedOps": 24,
+        "int4SelectedComponent": "ffn",
+        "int4SelectedLayers": "8...15"
+      },
+      "prefillValidation": {
+        "maxAbsoluteError": 3.005859375,
+        "meanAbsoluteError": 0.44225093722343445,
+        "topKAgreement": 9,
+        "top1Matches": true
+      },
+      "decodeValidation": {
+        "logitsMaxAbsoluteError": 2.32843017578125,
+        "logitsMeanAbsoluteError": 0.5262262225151062,
+        "kvMaxAbsoluteError": 1.501708984375,
+        "kvMeanAbsoluteError": 0.11982747470998827,
+        "topKAgreement": 8,
+        "top1Matches": true
+      },
+      "swiftBenchmark": {
+        "configurationId": "real-minicpm5-context16-mixed-ffn8-15-local",
+        "generatedTokenIds": [242, 38],
+        "averageTokenAgreement": 1.0,
+        "durationSeconds": 37.638
+      },
+      "summary": "FFN8...15 preserves context-16 top-1 on the local prompt, compiles for watchOS, and runs through the Swift benchmark chain, but top-10 agreement and logits/KV drift are meaningfully worse than FFN10...13. Treat it as a size-quality frontier point, not the default policy."
     }
   },
   "contextVariant": 512,

@@ -2,44 +2,7 @@
 import CoreML
 import Foundation
 
-public struct CoreMLPrefillDecodeBundle: Sendable {
-    public var prefillModelURL: URL
-    public var decodeModelURL: URL
-    public var maxPromptTokens: Int
-    public var prefillInputName: String
-    public var prefillNextTokenOutputName: String
-    public var prefillKVCacheOutputName: String
-    public var decodeTokenInputName: String
-    public var decodeKVCacheInputName: String
-    public var decodeNextTokenOutputName: String
-    public var decodeKVCacheOutputName: String
-
-    public init(
-        prefillModelURL: URL,
-        decodeModelURL: URL,
-        maxPromptTokens: Int,
-        prefillInputName: String = "input_ids",
-        prefillNextTokenOutputName: String = "next_token",
-        prefillKVCacheOutputName: String = "kv_cache",
-        decodeTokenInputName: String = "token",
-        decodeKVCacheInputName: String = "kv_cache",
-        decodeNextTokenOutputName: String = "next_token",
-        decodeKVCacheOutputName: String = "updated_kv_cache"
-    ) {
-        self.prefillModelURL = prefillModelURL
-        self.decodeModelURL = decodeModelURL
-        self.maxPromptTokens = maxPromptTokens
-        self.prefillInputName = prefillInputName
-        self.prefillNextTokenOutputName = prefillNextTokenOutputName
-        self.prefillKVCacheOutputName = prefillKVCacheOutputName
-        self.decodeTokenInputName = decodeTokenInputName
-        self.decodeKVCacheInputName = decodeKVCacheInputName
-        self.decodeNextTokenOutputName = decodeNextTokenOutputName
-        self.decodeKVCacheOutputName = decodeKVCacheOutputName
-    }
-}
-
-public final class CoreMLPrefillDecodeRuntime: InferenceRuntime, @unchecked Sendable {
+public final class CoreMLPrefillDecodeRuntime: StreamingInferenceRuntime, @unchecked Sendable {
     private let bundle: CoreMLPrefillDecodeBundle
     private let tokenizer: any TextTokenizer
     private let lock = NSLock()
@@ -64,8 +27,42 @@ public final class CoreMLPrefillDecodeRuntime: InferenceRuntime, @unchecked Send
         request: InferenceRequest,
         shouldCancel: @Sendable () -> Bool
     ) async throws -> InferenceResult {
+        try await generateInternal(
+            request: request,
+            shouldCancel: shouldCancel,
+            onToken: nil
+        )
+    }
+
+    public func stream(
+        request: InferenceRequest,
+        shouldCancel: @escaping @Sendable () -> Bool
+    ) -> AsyncThrowingStream<InferenceStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let result = try await self.generateInternal(
+                        request: request,
+                        shouldCancel: shouldCancel
+                    ) { token in
+                        continuation.yield(.token(token))
+                    }
+                    continuation.yield(.completed(result))
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
+    private func generateInternal(
+        request: InferenceRequest,
+        shouldCancel: @Sendable () -> Bool,
+        onToken: (@Sendable (InferenceToken) -> Void)?
+    ) async throws -> InferenceResult {
         guard request.maxNewTokens > 0 else {
-            return InferenceResult(tokens: [], timing: RuntimeTiming())
+            return InferenceResult(tokens: [], timing: RuntimeTiming(), terminationReason: .maxTokens)
         }
 
         if shouldCancel() {
@@ -78,9 +75,43 @@ public final class CoreMLPrefillDecodeRuntime: InferenceRuntime, @unchecked Send
         }
 
         let models = try currentModels()
+
+        switch bundle.graphInterface {
+        case .tokenAndSingleKV:
+            return try await generateTokenAndSingleKV(
+                request: request,
+                promptTokens: promptTokens,
+                models: models,
+                onToken: onToken,
+                shouldCancel: shouldCancel
+            )
+        case .logitsAndLayeredKV(let layerCount, _, _):
+            return try await generateLogitsAndLayeredKV(
+                request: request,
+                promptTokens: promptTokens,
+                models: models,
+                layerCount: layerCount,
+                onToken: onToken,
+                shouldCancel: shouldCancel
+            )
+        }
+    }
+
+    private func generateTokenAndSingleKV(
+        request: InferenceRequest,
+        promptTokens: [Int32],
+        models: LoadedPrefillDecodeModels,
+        onToken: (@Sendable (InferenceToken) -> Void)?,
+        shouldCancel: @Sendable () -> Bool
+    ) async throws -> InferenceResult {
         var emittedTokenIDs: [Int32] = []
         var emittedText: [String] = []
         var decodeStepMs: [Double] = []
+        var terminationReason = InferenceTerminationReason.maxTokens
+        let stopCriteria = DecodeStopCriteria(
+            maxNewTokens: request.maxNewTokens,
+            eosTokenIDs: tokenizer.endOfSequenceTokenIDs
+        )
 
         let prefillStarted = Date()
         let prefillInput = try CoreMLDictionaryFeatureProvider(features: [
@@ -102,12 +133,21 @@ public final class CoreMLPrefillDecodeRuntime: InferenceRuntime, @unchecked Send
             name: bundle.prefillKVCacheOutputName
         )
 
-        if !tokenizer.endOfSequenceTokenIDs.contains(nextTokenID) {
+        if tokenizer.endOfSequenceTokenIDs.contains(nextTokenID) {
+            terminationReason = .endOfSequence
+        } else {
+            let text = try tokenizer.decode(tokenIDs: [nextTokenID])
+            onToken?(InferenceToken(
+                index: emittedTokenIDs.count,
+                tokenID: nextTokenID,
+                text: text,
+                isFirstToken: emittedTokenIDs.isEmpty
+            ))
             emittedTokenIDs.append(nextTokenID)
-            emittedText.append(try tokenizer.decode(tokenIDs: [nextTokenID]))
+            emittedText.append(text)
         }
 
-        while emittedTokenIDs.count < request.maxNewTokens {
+        while !stopCriteria.shouldStop(generatedTokenIDs: emittedTokenIDs) && terminationReason != .endOfSequence {
             if shouldCancel() {
                 throw InferenceRuntimeError.cancelled(partialTokens: emittedText)
             }
@@ -131,21 +171,181 @@ public final class CoreMLPrefillDecodeRuntime: InferenceRuntime, @unchecked Send
             )
 
             if tokenizer.endOfSequenceTokenIDs.contains(nextTokenID) {
+                terminationReason = .endOfSequence
                 break
             }
 
+            let text = try tokenizer.decode(tokenIDs: [nextTokenID])
+            onToken?(InferenceToken(
+                index: emittedTokenIDs.count,
+                tokenID: nextTokenID,
+                text: text,
+                isFirstToken: emittedTokenIDs.isEmpty
+            ))
             emittedTokenIDs.append(nextTokenID)
-            emittedText.append(try tokenizer.decode(tokenIDs: [nextTokenID]))
+            emittedText.append(text)
         }
 
         return InferenceResult(
             tokens: emittedText,
+            generatedTokenIDs: emittedTokenIDs,
             timing: RuntimeTiming(
                 prefillMs: prefillMs,
                 firstTokenMs: prefillMs,
                 decodeStepMs: decodeStepMs
-            )
+            ),
+            terminationReason: terminationReason
         )
+    }
+
+    private func generateLogitsAndLayeredKV(
+        request: InferenceRequest,
+        promptTokens: [Int32],
+        models: LoadedPrefillDecodeModels,
+        layerCount: Int,
+        onToken: (@Sendable (InferenceToken) -> Void)?,
+        shouldCancel: @Sendable () -> Bool
+    ) async throws -> InferenceResult {
+        var inputState = try CoreMLMiniCPMInputState(
+            tokenIDs: promptTokens,
+            capacity: bundle.maxPromptTokens
+        )
+        var emittedTokenIDs: [Int32] = []
+        var emittedText: [String] = []
+        var decodeStepMs: [Double] = []
+        var metrics = InferenceMetrics(kvCacheUpdateStrategy: bundle.kvCacheUpdateStrategy)
+        var terminationReason = InferenceTerminationReason.maxTokens
+        let stopCriteria = DecodeStopCriteria(
+            maxNewTokens: request.maxNewTokens,
+            eosTokenIDs: tokenizer.endOfSequenceTokenIDs
+        )
+        let logitsSampler = CoreMLLogitsSampler(
+            processor: CoreMLLogitsProcessor(policy: bundle.logitsProcessor),
+            sampler: bundle.samplingStrategy.makeSampler()
+        )
+
+        let prefillStarted = Date()
+        let prefillInput = try CoreMLDictionaryFeatureProvider(features: [
+            bundle.prefillInputName: MLFeatureValue(multiArray: inputState.inputIDs),
+            bundle.prefillPositionInputName: MLFeatureValue(multiArray: inputState.positionIDs),
+            bundle.prefillCausalMaskInputName: MLFeatureValue(multiArray: inputState.causalMask)
+        ])
+        let prefillOutput = try await prediction(model: models.prefill, input: prefillInput)
+        let prefillMs = coreMLElapsedMilliseconds(since: prefillStarted)
+        let prefillLogits = try multiArrayOutput(from: prefillOutput, name: bundle.prefillLogitsOutputName)
+        let prefillSamplingStarted = Date()
+        var nextTokenID = try logitsSampler.selectToken(
+            from: prefillLogits
+        )
+        metrics.prefillSamplingMs = coreMLElapsedMilliseconds(since: prefillSamplingStarted)
+        var kvCache = try CoreMLKVCacheStore(
+            prefillOutput: prefillOutput,
+            layerCount: layerCount,
+            validTokenCount: inputState.realTokenCount,
+            updateStrategy: bundle.kvCacheUpdateStrategy,
+            keyOutputName: bundle.prefillKeyOutputName(forLayer:),
+            valueOutputName: bundle.prefillValueOutputName(forLayer:)
+        )
+
+        if tokenizer.endOfSequenceTokenIDs.contains(nextTokenID) {
+            terminationReason = .endOfSequence
+        } else {
+            let text = try tokenizer.decode(tokenIDs: [nextTokenID])
+            onToken?(InferenceToken(
+                index: emittedTokenIDs.count,
+                tokenID: nextTokenID,
+                text: text,
+                isFirstToken: emittedTokenIDs.isEmpty
+            ))
+            emittedTokenIDs.append(nextTokenID)
+            emittedText.append(text)
+        }
+
+        while !stopCriteria.shouldStop(generatedTokenIDs: emittedTokenIDs) && terminationReason != .endOfSequence {
+            if shouldCancel() {
+                throw InferenceRuntimeError.cancelled(partialTokens: emittedText)
+            }
+
+            let decodeStarted = Date()
+            let decodeInput = try layeredDecodeInput(
+                tokenID: nextTokenID,
+                inputState: inputState,
+                kvCache: kvCache,
+                layerCount: layerCount
+            )
+            let decodeOutput = try await prediction(model: models.decode, input: decodeInput)
+            decodeStepMs.append(coreMLElapsedMilliseconds(since: decodeStarted))
+            let decodeLogits = try multiArrayOutput(from: decodeOutput, name: bundle.decodeLogitsOutputName)
+            let decodeSamplingStarted = Date()
+            nextTokenID = try logitsSampler.selectToken(
+                from: decodeLogits,
+                generatedTokenIDs: emittedTokenIDs
+            )
+            metrics.decodeSamplingStepMs.append(coreMLElapsedMilliseconds(since: decodeSamplingStarted))
+            let kvAppendStarted = Date()
+            try kvCache.appendDecodeOutputs(
+                output: decodeOutput,
+                keyOutputName: bundle.decodeNewKeyOutputName(forLayer:),
+                valueOutputName: bundle.decodeNewValueOutputName(forLayer:)
+            )
+            metrics.kvAppendStepMs.append(coreMLElapsedMilliseconds(since: kvAppendStarted))
+            metrics.kvAppendWriteIndices.append(kvCache.lastAppendWriteIndex)
+            metrics.kvAppendMovedTokenSlots.append(kvCache.lastAppendMovedTokenCount)
+            metrics.kvAppendMovedScalarCounts.append(kvCache.lastAppendMovedScalarCount)
+            switch bundle.kvCacheUpdateStrategy {
+            case .contiguousSliding:
+                inputState.appendGeneratedToken()
+            case .slotRing:
+                try inputState.appendGeneratedToken(atPastKVSlot: kvCache.lastAppendWriteIndex)
+            }
+
+            if tokenizer.endOfSequenceTokenIDs.contains(nextTokenID) {
+                terminationReason = .endOfSequence
+                break
+            }
+
+            let text = try tokenizer.decode(tokenIDs: [nextTokenID])
+            onToken?(InferenceToken(
+                index: emittedTokenIDs.count,
+                tokenID: nextTokenID,
+                text: text,
+                isFirstToken: emittedTokenIDs.isEmpty
+            ))
+            emittedTokenIDs.append(nextTokenID)
+            emittedText.append(text)
+        }
+
+        return InferenceResult(
+            tokens: emittedText,
+            generatedTokenIDs: emittedTokenIDs,
+            timing: RuntimeTiming(
+                prefillMs: prefillMs,
+                firstTokenMs: prefillMs,
+                decodeStepMs: decodeStepMs
+            ),
+            metrics: metrics,
+            terminationReason: terminationReason
+        )
+    }
+
+    private func layeredDecodeInput(
+        tokenID: Int32,
+        inputState: CoreMLMiniCPMInputState,
+        kvCache: CoreMLKVCacheStore,
+        layerCount: Int
+    ) throws -> MLFeatureProvider {
+        var features: [String: MLFeatureValue] = [
+            bundle.decodeTokenInputName: MLFeatureValue(multiArray: try tokenIDArray(tokenID)),
+            bundle.decodePositionInputName: MLFeatureValue(multiArray: inputState.decodePositionID),
+            bundle.decodeCausalMaskInputName: MLFeatureValue(multiArray: inputState.decodeCausalMask)
+        ]
+
+        for layer in 0..<layerCount {
+            features[bundle.decodePastKeyInputName(forLayer: layer)] = MLFeatureValue(multiArray: kvCache.key(forLayer: layer))
+            features[bundle.decodePastValueInputName(forLayer: layer)] = MLFeatureValue(multiArray: kvCache.value(forLayer: layer))
+        }
+
+        return try CoreMLDictionaryFeatureProvider(features: features)
     }
 
     private func currentModels() throws -> LoadedPrefillDecodeModels {
@@ -164,10 +364,17 @@ public final class CoreMLPrefillDecodeRuntime: InferenceRuntime, @unchecked Send
         do {
             let configuration = MLModelConfiguration()
             configuration.computeUnits = .all
-            return LoadedPrefillDecodeModels(
-                prefill: try MLModel(contentsOf: bundle.prefillModelURL, configuration: configuration),
-                decode: try MLModel(contentsOf: bundle.decodeModelURL, configuration: configuration)
+            let models = LoadedPrefillDecodeModels(
+                prefill: try loadModel(at: bundle.prefillModelURL, configuration: configuration),
+                decode: try loadModel(at: bundle.decodeModelURL, configuration: configuration)
             )
+            try bundle.validateModelDescriptions(
+                prefill: models.prefill.modelDescription,
+                decode: models.decode.modelDescription
+            )
+            return models
+        } catch let error as InferenceRuntimeError {
+            throw error
         } catch {
             throw InferenceRuntimeError.unavailableRuntime(reason: "Core ML prefill/decode load failed: \(error.localizedDescription)")
         }
@@ -179,24 +386,15 @@ private struct LoadedPrefillDecodeModels {
     var decode: MLModel
 }
 
-private final class CoreMLDictionaryFeatureProvider: MLFeatureProvider {
-    private let features: [String: MLFeatureValue]
-
-    var featureNames: Set<String> {
-        Set(features.keys)
+private func loadModel(at url: URL, configuration: MLModelConfiguration) throws -> MLModel {
+    #if os(macOS)
+    if url.pathExtension == "mlpackage" || url.pathExtension == "mlmodel" {
+        let compiledURL = try MLModel.compileModel(at: url)
+        return try MLModel(contentsOf: compiledURL, configuration: configuration)
     }
+    #endif
 
-    init(features: [String: MLFeatureValue]) throws {
-        guard !features.isEmpty else {
-            throw InferenceRuntimeError.invalidInput(message: "Core ML input features cannot be empty.")
-        }
-
-        self.features = features
-    }
-
-    func featureValue(for featureName: String) -> MLFeatureValue? {
-        features[featureName]
-    }
+    return try MLModel(contentsOf: url, configuration: configuration)
 }
 
 private func prediction(model: MLModel, input: MLFeatureProvider) async throws -> MLFeatureProvider {
@@ -211,71 +409,6 @@ private func prediction(model: MLModel, input: MLFeatureProvider) async throws -
     } catch {
         throw InferenceRuntimeError.predictionFailed(message: error.localizedDescription)
     }
-}
-
-private func paddedPromptArray(tokenIDs: [Int32], capacity: Int) throws -> MLMultiArray {
-    guard capacity > 0 else {
-        throw InferenceRuntimeError.invalidInput(message: "maxPromptTokens must be positive.")
-    }
-
-    let array = try MLMultiArray(shape: [NSNumber(value: capacity)], dataType: .double)
-    let suffix = tokenIDs.suffix(capacity)
-    for index in 0..<capacity {
-        let tokenIndex = suffix.index(suffix.startIndex, offsetBy: index, limitedBy: suffix.index(before: suffix.endIndex))
-        let tokenID = tokenIndex.map { suffix[$0] } ?? 0
-        array[index] = NSNumber(value: Double(tokenID))
-    }
-    return array
-}
-
-private func scalarArray(_ value: Double) throws -> MLMultiArray {
-    let array = try MLMultiArray(shape: [1], dataType: .double)
-    array[0] = NSNumber(value: value)
-    return array
-}
-
-private func tokenIDOutput(from output: MLFeatureProvider, name: String) throws -> Int32 {
-    let value = try scalarCoreMLOutput(from: output, name: name)
-    guard value.isFinite, value >= 0, value <= Double(Int32.max) else {
-        throw InferenceRuntimeError.predictionFailed(message: "Output token \(name) is outside Int32 range.")
-    }
-
-    return Int32(value.rounded())
-}
-
-private func multiArrayOutput(from output: MLFeatureProvider, name: String) throws -> MLMultiArray {
-    guard let value = output.featureValue(for: name) else {
-        throw InferenceRuntimeError.predictionFailed(message: "Missing output feature \(name).")
-    }
-
-    guard let multiArray = value.multiArrayValue else {
-        throw InferenceRuntimeError.predictionFailed(message: "Output feature \(name) is not an MLMultiArray.")
-    }
-
-    return multiArray
-}
-
-private func scalarCoreMLOutput(from output: MLFeatureProvider, name: String) throws -> Double {
-    guard let value = output.featureValue(for: name) else {
-        throw InferenceRuntimeError.predictionFailed(message: "Missing output feature \(name).")
-    }
-
-    if let multiArray = value.multiArrayValue {
-        guard multiArray.count > 0 else {
-            throw InferenceRuntimeError.predictionFailed(message: "Output feature \(name) is empty.")
-        }
-        return multiArray[0].doubleValue
-    }
-
-    if value.type == .double {
-        return value.doubleValue
-    }
-
-    if value.type == .int64 {
-        return Double(value.int64Value)
-    }
-
-    throw InferenceRuntimeError.predictionFailed(message: "Output feature \(name) is not numeric.")
 }
 
 private func coreMLElapsedMilliseconds(since started: Date) -> Double {

@@ -20,6 +20,16 @@ public struct ModelManifest: Codable, Equatable, Sendable {
             errors.append("runtime.type must be \(ModelManifestContract.expectedRuntime)")
         }
 
+        if !runtime.entrypoints.contains("prefill") || !runtime.entrypoints.contains("decode") {
+            errors.append("runtime.entrypoints must include prefill and decode")
+        }
+
+        if !ModelManifestContract.supportedKVCacheModes.contains(runtime.kvCacheMode) {
+            errors.append("runtime.kvCacheMode must be stateful-preferred, slot-ring, or contiguous-sliding")
+        }
+
+        validateRuntimeGraphSchema(into: &errors)
+
         if architecture.layers != ModelManifestContract.layers {
             errors.append("architecture.layers must be \(ModelManifestContract.layers)")
         }
@@ -83,6 +93,82 @@ public struct ModelManifest: Codable, Equatable, Sendable {
         return errors
     }
 
+    private func validateRuntimeGraphSchema(into errors: inout [String]) {
+        let graphSchema = runtime.graphSchema
+
+        if graphSchema.interface != ModelManifestContract.graphInterface {
+            errors.append("runtime.graphSchema.interface must be \(ModelManifestContract.graphInterface)")
+        }
+
+        if graphSchema.layerCount != ModelManifestContract.layers {
+            errors.append("runtime.graphSchema.layerCount must be \(ModelManifestContract.layers)")
+        }
+
+        if graphSchema.kvHeads != ModelManifestContract.kvHeads {
+            errors.append("runtime.graphSchema.kvHeads must be \(ModelManifestContract.kvHeads)")
+        }
+
+        if graphSchema.headDimension != ModelManifestContract.headDimension {
+            errors.append("runtime.graphSchema.headDimension must be \(ModelManifestContract.headDimension)")
+        }
+
+        if graphSchema.prefill.inputIDs != ModelManifestContract.prefillInputIDs {
+            errors.append("runtime.graphSchema.prefill.inputIDs must be \(ModelManifestContract.prefillInputIDs)")
+        }
+
+        if graphSchema.prefill.positionIDs != ModelManifestContract.prefillPositionIDs {
+            errors.append("runtime.graphSchema.prefill.positionIDs must be \(ModelManifestContract.prefillPositionIDs)")
+        }
+
+        if graphSchema.prefill.causalMask != ModelManifestContract.causalMask {
+            errors.append("runtime.graphSchema.prefill.causalMask must be \(ModelManifestContract.causalMask)")
+        }
+
+        if graphSchema.prefill.logits != ModelManifestContract.logits {
+            errors.append("runtime.graphSchema.prefill.logits must be \(ModelManifestContract.logits)")
+        }
+
+        if graphSchema.prefill.keyPrefix != ModelManifestContract.prefillKeyPrefix {
+            errors.append("runtime.graphSchema.prefill.keyPrefix must be \(ModelManifestContract.prefillKeyPrefix)")
+        }
+
+        if graphSchema.prefill.valuePrefix != ModelManifestContract.prefillValuePrefix {
+            errors.append("runtime.graphSchema.prefill.valuePrefix must be \(ModelManifestContract.prefillValuePrefix)")
+        }
+
+        if graphSchema.decode.tokenID != ModelManifestContract.decodeTokenID {
+            errors.append("runtime.graphSchema.decode.tokenID must be \(ModelManifestContract.decodeTokenID)")
+        }
+
+        if graphSchema.decode.positionID != ModelManifestContract.decodePositionID {
+            errors.append("runtime.graphSchema.decode.positionID must be \(ModelManifestContract.decodePositionID)")
+        }
+
+        if graphSchema.decode.causalMask != ModelManifestContract.causalMask {
+            errors.append("runtime.graphSchema.decode.causalMask must be \(ModelManifestContract.causalMask)")
+        }
+
+        if graphSchema.decode.logits != ModelManifestContract.logits {
+            errors.append("runtime.graphSchema.decode.logits must be \(ModelManifestContract.logits)")
+        }
+
+        if graphSchema.decode.pastKeyPrefix != ModelManifestContract.decodePastKeyPrefix {
+            errors.append("runtime.graphSchema.decode.pastKeyPrefix must be \(ModelManifestContract.decodePastKeyPrefix)")
+        }
+
+        if graphSchema.decode.pastValuePrefix != ModelManifestContract.decodePastValuePrefix {
+            errors.append("runtime.graphSchema.decode.pastValuePrefix must be \(ModelManifestContract.decodePastValuePrefix)")
+        }
+
+        if graphSchema.decode.newKeyPrefix != ModelManifestContract.decodeNewKeyPrefix {
+            errors.append("runtime.graphSchema.decode.newKeyPrefix must be \(ModelManifestContract.decodeNewKeyPrefix)")
+        }
+
+        if graphSchema.decode.newValuePrefix != ModelManifestContract.decodeNewValuePrefix {
+            errors.append("runtime.graphSchema.decode.newValuePrefix must be \(ModelManifestContract.decodeNewValuePrefix)")
+        }
+    }
+
     public func modelArtifact(
         for deviceProfile: DeviceProfile,
         requestedContextTokens: Int?
@@ -138,6 +224,47 @@ public struct RuntimeInfo: Codable, Equatable, Sendable {
     public var type: String
     public var entrypoints: [String]
     public var kvCacheMode: String
+    public var graphSchema: RuntimeGraphSchema
+
+    public var kvCacheUpdateStrategy: KVCacheUpdateStrategy {
+        switch kvCacheMode {
+        case "contiguous-sliding":
+            return .contiguousSliding
+        case "stateful-preferred", "slot-ring":
+            return .slotRing
+        default:
+            return .slotRing
+        }
+    }
+}
+
+public struct RuntimeGraphSchema: Codable, Equatable, Sendable {
+    public var interface: String
+    public var layerCount: Int
+    public var kvHeads: Int
+    public var headDimension: Int
+    public var prefill: PrefillGraphSchema
+    public var decode: DecodeGraphSchema
+}
+
+public struct PrefillGraphSchema: Codable, Equatable, Sendable {
+    public var inputIDs: String
+    public var positionIDs: String
+    public var causalMask: String
+    public var logits: String
+    public var keyPrefix: String
+    public var valuePrefix: String
+}
+
+public struct DecodeGraphSchema: Codable, Equatable, Sendable {
+    public var tokenID: String
+    public var positionID: String
+    public var causalMask: String
+    public var logits: String
+    public var pastKeyPrefix: String
+    public var pastValuePrefix: String
+    public var newKeyPrefix: String
+    public var newValuePrefix: String
 }
 
 public struct ArchitectureInfo: Codable, Equatable, Sendable {
@@ -245,9 +372,24 @@ public struct FallbackPolicy: Codable, Equatable, Sendable {
 enum ModelManifestContract {
     static let expectedModelId = "openbmb/MiniCPM5-1B"
     static let expectedRuntime = "coreml-mlprogram"
+    static let graphInterface = "logits-layered-kv"
+    static let supportedKVCacheModes = ["stateful-preferred", "slot-ring", "contiguous-sliding"]
     static let layers = 24
     static let hiddenSize = 1536
     static let queryHeads = 16
     static let kvHeads = 2
+    static let headDimension = 128
     static let supportedContextVariants = [256, 512, 1024]
+    static let prefillInputIDs = "input_ids"
+    static let prefillPositionIDs = "position_ids"
+    static let causalMask = "causal_mask"
+    static let logits = "logits"
+    static let prefillKeyPrefix = "present_key_"
+    static let prefillValuePrefix = "present_value_"
+    static let decodeTokenID = "token_id"
+    static let decodePositionID = "position_id"
+    static let decodePastKeyPrefix = "past_key_"
+    static let decodePastValuePrefix = "past_value_"
+    static let decodeNewKeyPrefix = "new_key_"
+    static let decodeNewValuePrefix = "new_value_"
 }

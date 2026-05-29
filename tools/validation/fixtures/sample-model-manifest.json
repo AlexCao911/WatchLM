@@ -8,7 +8,31 @@
   "runtime": {
     "type": "coreml-mlprogram",
     "entrypoints": ["prefill", "decode"],
-    "kvCacheMode": "stateful-preferred"
+    "kvCacheMode": "stateful-preferred",
+    "graphSchema": {
+      "interface": "logits-layered-kv",
+      "layerCount": 24,
+      "kvHeads": 2,
+      "headDimension": 128,
+      "prefill": {
+        "inputIDs": "input_ids",
+        "positionIDs": "position_ids",
+        "causalMask": "causal_mask",
+        "logits": "logits",
+        "keyPrefix": "present_key_",
+        "valuePrefix": "present_value_"
+      },
+      "decode": {
+        "tokenID": "token_id",
+        "positionID": "position_id",
+        "causalMask": "causal_mask",
+        "logits": "logits",
+        "pastKeyPrefix": "past_key_",
+        "pastValuePrefix": "past_value_",
+        "newKeyPrefix": "new_key_",
+        "newValuePrefix": "new_value_"
+      }
+    }
   },
   "architecture": {
     "type": "LlamaForCausalLM",

@@ -1,5 +1,41 @@
+import Foundation
 import Testing
 @testable import WatchLMCore
+
+#if os(macOS)
+@Test func miniCPMBytePairTokenizerMatchesLocalHFTokenizerSmoke() throws {
+    let tokenizer = try MiniCPMBytePairTokenizer(
+        tokenizerJSONURL: localMiniCPMTokenizerJSONURL(),
+        addBosToken: true
+    )
+
+    #expect(try tokenizer.encode("Hello world!") == [0, 36417, 1782, 22])
+    #expect(try tokenizer.encode("Answer briefly.") == [0, 21742, 15020, 35])
+    #expect(try tokenizer.encode("你好") == [0, 75828])
+    #expect(try tokenizer.decode(tokenIDs: [36417, 1782, 22]) == "Hello world!")
+    #expect(try tokenizer.decode(tokenIDs: [0, 36417, 1782, 22]) == "<s>Hello world!")
+}
+
+@Test func miniCPMBytePairTokenizerEncodesRenderedNoThinkTemplate() throws {
+    let template = MiniCPMChatTemplate(bosToken: "<s>")
+    let rendered = template.render(
+        messages: [ChatMessage(role: .user, content: "Hi")],
+        addGenerationPrompt: true,
+        enableThinking: false
+    )
+    let tokenizer = try MiniCPMBytePairTokenizer(
+        tokenizerJSONURL: localMiniCPMTokenizerJSONURL(),
+        addBosToken: false
+    )
+
+    let tokenIDs = try tokenizer.encode(rendered)
+
+    #expect(tokenIDs == [
+        0, 130072, 8448, 220, 19301, 130073, 220,
+        130072, 130071, 220, 8, 130063, 9, 130063
+    ])
+}
+#endif
 
 @Test func miniCPMChatTemplateRendersNoThinkFastPath() throws {
     let template = MiniCPMChatTemplate(bosToken: "<bos>")
@@ -20,6 +56,13 @@ import Testing
         "<think>\n\n</think>\n\n"
     #expect(rendered == expected)
 }
+
+#if os(macOS)
+private func localMiniCPMTokenizerJSONURL() -> URL {
+    URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appending(path: "artifacts/hf/MiniCPM5-1B/tokenizer.json")
+}
+#endif
 
 @Test func miniCPMSpecialTokensMatchPublishedConfig() {
     #expect(MiniCPMSpecialTokens.bosTokenID == 0)

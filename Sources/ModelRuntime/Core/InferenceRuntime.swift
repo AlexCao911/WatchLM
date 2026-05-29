@@ -8,18 +8,55 @@ public struct InferenceRequest: Codable, Equatable, Sendable {
     }
 }
 
+public enum InferenceTerminationReason: String, Codable, Equatable, Sendable {
+    case maxTokens
+    case endOfSequence
+    case sourceExhausted
+}
+
 public struct InferenceResult: Codable, Equatable, Sendable {
     public var tokens: [String]
+    public var generatedTokenIDs: [Int32]
     public var timing: RuntimeTiming
+    public var metrics: InferenceMetrics
+    public var terminationReason: InferenceTerminationReason
 
-    public init(tokens: [String], timing: RuntimeTiming) {
+    public init(
+        tokens: [String],
+        generatedTokenIDs: [Int32] = [],
+        timing: RuntimeTiming,
+        metrics: InferenceMetrics = InferenceMetrics(),
+        terminationReason: InferenceTerminationReason = .maxTokens
+    ) {
         self.tokens = tokens
+        self.generatedTokenIDs = generatedTokenIDs
         self.timing = timing
+        self.metrics = metrics
+        self.terminationReason = terminationReason
     }
 
     public var text: String {
         tokens.joined()
     }
+}
+
+public struct InferenceToken: Codable, Equatable, Sendable {
+    public var index: Int
+    public var tokenID: Int32?
+    public var text: String
+    public var isFirstToken: Bool
+
+    public init(index: Int, tokenID: Int32?, text: String, isFirstToken: Bool) {
+        self.index = index
+        self.tokenID = tokenID
+        self.text = text
+        self.isFirstToken = isFirstToken
+    }
+}
+
+public enum InferenceStreamEvent: Codable, Equatable, Sendable {
+    case token(InferenceToken)
+    case completed(InferenceResult)
 }
 
 public enum InferenceRuntimeError: Error, Codable, Equatable, Sendable {
@@ -52,4 +89,11 @@ public protocol InferenceRuntime: Sendable {
         request: InferenceRequest,
         shouldCancel: @Sendable () -> Bool
     ) async throws -> InferenceResult
+}
+
+public protocol StreamingInferenceRuntime: InferenceRuntime {
+    func stream(
+        request: InferenceRequest,
+        shouldCancel: @escaping @Sendable () -> Bool
+    ) -> AsyncThrowingStream<InferenceStreamEvent, Error>
 }

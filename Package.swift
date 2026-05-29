@@ -18,6 +18,8 @@ let package = Package(
             exclude: [
                 "Resources/SmokeDecode.mlmodel",
                 "Resources/SmokeIdentity.mlmodel",
+                "Resources/SmokeLayeredDecode.mlpackage",
+                "Resources/SmokeLayeredPrefill.mlpackage",
                 "Resources/SmokePrefill.mlmodel"
             ],
             resources: [
@@ -25,6 +27,10 @@ let package = Package(
                 .copy("Resources/SmokeDecode_watchOS.mlmodelc"),
                 .copy("Resources/SmokeIdentity_macOS.mlmodelc"),
                 .copy("Resources/SmokeIdentity_watchOS.mlmodelc"),
+                .copy("Resources/SmokeLayeredDecode_macOS.mlmodelc"),
+                .copy("Resources/SmokeLayeredDecode_watchOS.mlmodelc"),
+                .copy("Resources/SmokeLayeredPrefill_macOS.mlmodelc"),
+                .copy("Resources/SmokeLayeredPrefill_watchOS.mlmodelc"),
                 .copy("Resources/SmokePrefill_macOS.mlmodelc"),
                 .copy("Resources/SmokePrefill_watchOS.mlmodelc")
             ]

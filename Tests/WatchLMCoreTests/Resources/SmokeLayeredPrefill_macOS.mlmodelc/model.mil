@@ -1,0 +1,20 @@
+program(1.0)
+[buildInfo = dict<tensor<string, []>, tensor<string, []>>({{"coremlc-component-MIL", "3510.2.1"}, {"coremlc-version", "3500.32.1"}, {"coremltools-component-torch", "2.12.0"}, {"coremltools-source-dialect", "TorchScript"}, {"coremltools-version", "9.0"}})]
+{
+    func main<ios17>(tensor<fp16, [1, 1, 4, 4]> causal_mask, tensor<int32, [1, 4]> input_ids, tensor<int32, [1, 4]> position_ids) {
+            tensor<int32, [2]> shape_0 = const()[name = tensor<string, []>("shape_0"), val = tensor<int32, [2]>([1, 8])];
+            tensor<int32, [1]> slice_by_index_0 = const()[name = tensor<string, []>("slice_by_index_0"), val = tensor<int32, [1]>([5])];
+            tensor<string, []> scatter_0_mode_0 = const()[name = tensor<string, []>("scatter_0_mode_0"), val = tensor<string, []>("update")];
+            tensor<int32, []> scatter_0_axis_0 = const()[name = tensor<string, []>("scatter_0_axis_0"), val = tensor<int32, []>(0)];
+            tensor<bool, []> scatter_0_validate_indices_0 = const()[name = tensor<string, []>("scatter_0_validate_indices_0"), val = tensor<bool, []>(false)];
+            tensor<fp16, [8]> reshape_3_to_fp16 = const()[name = tensor<string, []>("reshape_3_to_fp16"), val = tensor<fp16, [8]>([-0x1.f4p+9, -0x1.f4p+9, -0x1.f4p+9, -0x1.f4p+9, -0x1.f4p+9, -0x1.f4p+9, -0x1.f4p+9, -0x1.f4p+9])];
+            tensor<fp16, [1]> const_0_to_fp16 = const()[name = tensor<string, []>("const_0_to_fp16"), val = tensor<fp16, [1]>([0x1.f4p+9])];
+            tensor<fp16, [8]> scatter_0_cast_fp16 = scatter(axis = scatter_0_axis_0, data = reshape_3_to_fp16, indices = slice_by_index_0, mode = scatter_0_mode_0, updates = const_0_to_fp16, validate_indices = scatter_0_validate_indices_0)[name = tensor<string, []>("scatter_0_cast_fp16")];
+            tensor<fp16, [1, 8]> logits = reshape(shape = shape_0, x = scatter_0_cast_fp16)[name = tensor<string, []>("reshape_4_cast_fp16")];
+            tensor<fp16, [1, 1, 4, 1]> present_key_0 = const()[name = tensor<string, []>("present_key_0"), val = tensor<fp16, [1, 1, 4, 1]>([[[[0x0p+0], [0x0p+0], [0x0p+0], [0x0p+0]]]])];
+            tensor<fp16, [1, 1, 4, 1]> present_value_0 = const()[name = tensor<string, []>("present_value_0"), val = tensor<fp16, [1, 1, 4, 1]>([[[[0x0p+0], [0x0p+0], [0x0p+0], [0x0p+0]]]])];
+            tensor<int32, [1, 4]> input_ids_tmp = identity(x = input_ids)[name = tensor<string, []>("input_ids_tmp")];
+            tensor<int32, [1, 4]> position_ids_tmp = identity(x = position_ids)[name = tensor<string, []>("position_ids_tmp")];
+            tensor<fp16, [1, 1, 4, 4]> causal_mask_tmp = identity(x = causal_mask)[name = tensor<string, []>("causal_mask_tmp")];
+        } -> (logits, present_key_0, present_value_0);
+}

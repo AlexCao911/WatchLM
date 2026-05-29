@@ -6,9 +6,11 @@ import { fileURLToPath } from "node:url";
 
 import {
   EXPECTED_ARCHITECTURE,
+  EXPECTED_GRAPH_SCHEMA,
   EXPECTED_MODEL_ID,
   EXPECTED_RUNTIME,
   SUPPORTED_CONTEXT_VARIANTS,
+  SUPPORTED_KV_CACHE_MODES,
   assertValidModelManifest,
   selectContextVariant,
   selectModelArtifact,
@@ -42,6 +44,35 @@ test("valid MiniCPM5 Core ML manifest passes validation", () => {
 test("manifest constants encode the fidelity-first MiniCPM5 contract", () => {
   assert.equal(EXPECTED_MODEL_ID, "openbmb/MiniCPM5-1B");
   assert.equal(EXPECTED_RUNTIME, "coreml-mlprogram");
+  assert.deepEqual(SUPPORTED_KV_CACHE_MODES, [
+    "stateful-preferred",
+    "slot-ring",
+    "contiguous-sliding"
+  ]);
+  assert.deepEqual(EXPECTED_GRAPH_SCHEMA, {
+    interface: "logits-layered-kv",
+    layerCount: 24,
+    kvHeads: 2,
+    headDimension: 128,
+    prefill: {
+      inputIDs: "input_ids",
+      positionIDs: "position_ids",
+      causalMask: "causal_mask",
+      logits: "logits",
+      keyPrefix: "present_key_",
+      valuePrefix: "present_value_"
+    },
+    decode: {
+      tokenID: "token_id",
+      positionID: "position_id",
+      causalMask: "causal_mask",
+      logits: "logits",
+      pastKeyPrefix: "past_key_",
+      pastValuePrefix: "past_value_",
+      newKeyPrefix: "new_key_",
+      newValuePrefix: "new_value_"
+    }
+  });
   assert.deepEqual(SUPPORTED_CONTEXT_VARIANTS, [256, 512, 1024]);
   assert.deepEqual(EXPECTED_ARCHITECTURE, {
     layers: 24,
@@ -60,6 +91,35 @@ test("runtime must be Core ML mlprogram", () => {
 
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /runtime\.type must be coreml-mlprogram/);
+});
+
+test("runtime graph schema must expose logits and layered KV IO names", () => {
+  const manifest = clone(validManifest);
+  manifest.runtime.graphSchema.interface = "next-token";
+  manifest.runtime.graphSchema.layerCount = 1;
+  manifest.runtime.graphSchema.prefill.logits = "next_token";
+  manifest.runtime.graphSchema.decode.pastKeyPrefix = "cache_key_";
+
+  const result = validateModelManifest(manifest);
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /runtime\.graphSchema\.interface must be logits-layered-kv/);
+  assert.match(result.errors.join("\n"), /runtime\.graphSchema\.layerCount must be 24/);
+  assert.match(result.errors.join("\n"), /runtime\.graphSchema\.prefill\.logits must be logits/);
+  assert.match(result.errors.join("\n"), /runtime\.graphSchema\.decode\.pastKeyPrefix must be past_key_/);
+});
+
+test("runtime KV cache mode must stay in the explicit Swift update strategy set", () => {
+  const manifest = clone(validManifest);
+  manifest.runtime.kvCacheMode = "copy-everything";
+
+  const result = validateModelManifest(manifest);
+
+  assert.equal(result.ok, false);
+  assert.match(
+    result.errors.join("\n"),
+    /runtime\.kvCacheMode must be stateful-preferred, slot-ring, or contiguous-sliding/
+  );
 });
 
 test("source model must stay MiniCPM5-1B", () => {
@@ -190,6 +250,7 @@ test("summarizeModelManifest exposes audit-friendly details", () => {
     contextVariants: [256, 512, 1024],
     assetStorage: "application-support",
     assetVariants: [256, 512],
+    kvCacheMode: "stateful-preferred",
     quantizationStrategy: "mixed-precision-fidelity-first",
     kvCachePrecision: "int8"
   });

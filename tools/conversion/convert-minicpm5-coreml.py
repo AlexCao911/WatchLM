@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import time
 import traceback
@@ -22,6 +23,25 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODEL_ID = "openbmb/MiniCPM5-1B"
 DEFAULT_CACHE_DIR = ROOT / "artifacts" / "hf" / "MiniCPM5-1B"
 DEFAULT_PROMPT = "Apple Watch local inference test."
+DEFAULT_PRECISION_POLICY = ROOT / "tools" / "conversion" / "mixed-precision-policy.json"
+SUPPORTED_MIXED_PRECISIONS = {"fp16", "int8", "int4"}
+MIXED_POLICY_COMPONENTS = ("embedding", "lmHead", "norms", "attentionQKO", "attentionV", "ffn")
+TRANSFORMER_COMPONENTS = ("attentionQKO", "attentionV", "ffn")
+DEFAULT_OP_NAME_PATTERNS: dict[str, list[str]] = {
+    "embedding": ["embed_tokens", "tok_embeddings", "embedding"],
+    "lmHead": ["lm_head", "output_projection"],
+    "norms": ["input_layernorm", "post_attention_layernorm", "norm"],
+    "attentionQKO": [
+        "self_attn.q_proj",
+        "self_attn.k_proj",
+        "self_attn.o_proj",
+        "attention.wq",
+        "attention.wk",
+        "attention.wo",
+    ],
+    "attentionV": ["self_attn.v_proj", "attention.wv"],
+    "ffn": ["mlp.gate_proj", "mlp.up_proj", "mlp.down_proj", "feed_forward", "ffn"],
+}
 
 
 class MiniCPMPrefillWrapper(torch.nn.Module):
@@ -106,6 +126,11 @@ class MiniCPMDecodeKVWrapper(torch.nn.Module):
 
 def main() -> None:
     args = parse_args()
+    mixed_policy = load_mixed_precision_policy(args.precision_policy) if args.compression == "mixed" else None
+    if args.describe_compression_policy:
+        print(json.dumps(build_mixed_compression_plan(mixed_policy), indent=2))
+        return
+
     output_dir = (ROOT / args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     report_path = output_dir / "conversion-report.json"
@@ -115,33 +140,47 @@ def main() -> None:
         "computePrecision": args.compute_precision,
         "graph": args.graph,
         "compression": args.compression,
+        "sourceMlpackagePath": args.source_mlpackage,
         "legacyQuantizeFlag": args.quantize,
         "prompt": args.prompt,
         "stages": [],
     }
+    if mixed_policy is not None:
+        report["precisionPolicyPath"] = report_path_string(resolve_repo_path(args.precision_policy))
+        report["mixedPrecisionPolicy"] = build_mixed_compression_plan(mixed_policy)
 
     try:
-        snapshot_path = run_stage(report, "download_snapshot", lambda: download_snapshot(args))
-        tokenizer = run_stage(report, "load_tokenizer", lambda: load_tokenizer(snapshot_path))
-        model = run_stage(report, "load_model", lambda: load_model(snapshot_path))
-        example_inputs = run_stage(
-            report,
-            "build_example_inputs",
-            lambda: build_example_inputs(model, tokenizer, args),
-        )
-        traced = run_stage(report, f"trace_{args.graph}", lambda: trace_graph(model, example_inputs, args))
-        mlpackage_path = run_stage(
-            report,
-            f"convert_{args.graph}_coreml",
-            lambda: convert_graph(traced, example_inputs, output_dir, model.config.num_hidden_layers, args),
-        )
-
-        if args.compression != "none":
+        if args.source_mlpackage:
+            mlpackage_path = resolve_repo_path(args.source_mlpackage)
+        else:
+            snapshot_path = run_stage(report, "download_snapshot", lambda: download_snapshot(args))
+            tokenizer = run_stage(report, "load_tokenizer", lambda: load_tokenizer(snapshot_path))
+            model = run_stage(report, "load_model", lambda: load_model(snapshot_path))
+            example_inputs = run_stage(
+                report,
+                "build_example_inputs",
+                lambda: build_example_inputs(model, tokenizer, args),
+            )
+            traced = run_stage(report, f"trace_{args.graph}", lambda: trace_graph(model, example_inputs, args))
             mlpackage_path = run_stage(
                 report,
-                f"compress_coreml_weights_{args.compression}",
-                lambda: compress_coreml_package(mlpackage_path, output_dir, args.compression),
+                f"convert_{args.graph}_coreml",
+                lambda: convert_graph(traced, example_inputs, output_dir, model.config.num_hidden_layers, args),
             )
+
+        if args.compression != "none":
+            def compress_action() -> Path:
+                compressed_path, compression_audit = compress_coreml_package(
+                    mlpackage_path,
+                    output_dir,
+                    args.compression,
+                    mixed_policy,
+                )
+                if compression_audit is not None:
+                    report["compressionAudit"] = compression_audit
+                return compressed_path
+
+            mlpackage_path = run_stage(report, f"compress_coreml_weights_{args.compression}", compress_action)
 
         report["status"] = "succeeded"
         report["mlpackagePath"] = str(mlpackage_path.relative_to(ROOT))
@@ -168,14 +207,33 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--context-tokens", type=int, default=16)
     parser.add_argument("--prompt", default=DEFAULT_PROMPT)
     parser.add_argument("--output-dir", default="artifacts/coreml/real-minicpm5-prefill-16")
+    parser.add_argument(
+        "--source-mlpackage",
+        default=None,
+        help="Compress an existing mlpackage and skip PyTorch tracing/conversion.",
+    )
     parser.add_argument("--compute-precision", choices=["float16", "float32"], default="float16")
-    parser.add_argument("--compression", choices=["none", "int8", "int4"], default=None)
+    parser.add_argument("--compression", choices=["none", "int8", "int4", "mixed"], default=None)
+    parser.add_argument(
+        "--precision-policy",
+        default=str(DEFAULT_PRECISION_POLICY.relative_to(ROOT)),
+        help="JSON policy for --compression mixed.",
+    )
+    parser.add_argument(
+        "--describe-compression-policy",
+        action="store_true",
+        help="Print the mixed precision compression plan and exit without loading the model.",
+    )
     parser.add_argument("--quantize", action="store_true", help="Deprecated alias for --compression int8.")
     args = parser.parse_args()
     if args.compression is None:
         args.compression = "int8" if args.quantize else "none"
     elif args.quantize and args.compression != "int8":
         parser.error("--quantize can only be combined with --compression int8")
+    if args.describe_compression_policy and args.compression != "mixed":
+        parser.error("--describe-compression-policy requires --compression mixed")
+    if args.source_mlpackage and args.compression == "none":
+        parser.error("--source-mlpackage requires --compression int8, int4, or mixed")
     return args
 
 
@@ -402,7 +460,244 @@ def output_types(graph: str, num_hidden_layers: int) -> list[ct.TensorType]:
     return outputs
 
 
-def compress_coreml_package(mlpackage_path: Path, output_dir: Path, compression: str) -> Path:
+def resolve_repo_path(path: str | Path) -> Path:
+    resolved = Path(path)
+    if not resolved.is_absolute():
+        resolved = ROOT / resolved
+    return resolved.resolve()
+
+
+def report_path_string(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def load_mixed_precision_policy(policy_path: str | Path) -> dict[str, Any]:
+    path = resolve_repo_path(policy_path)
+    policy = json.loads(path.read_text())
+    quantization = policy.get("quantization", {})
+
+    weights = policy.get("weights") or quantization.get("weights")
+    if not isinstance(weights, dict):
+        raise ValueError("mixed precision policy must include weights")
+
+    normalized_weights: dict[str, str] = {}
+    for component in MIXED_POLICY_COMPONENTS:
+        precision = weights.get(component)
+        if precision not in SUPPORTED_MIXED_PRECISIONS:
+            raise ValueError(f"mixed precision policy weights.{component} must be fp16, int8, or int4")
+        normalized_weights[component] = precision
+
+    strategy = policy.get("strategy") or quantization.get("strategy")
+    if strategy != "mixed-precision-fidelity-first":
+        raise ValueError("mixed precision policy strategy must be mixed-precision-fidelity-first")
+
+    kv_cache = policy.get("kvCache") or quantization.get("kvCache")
+    if kv_cache != "int8":
+        raise ValueError("mixed precision policy kvCache must be int8")
+
+    structural_reduction = policy.get("structuralReduction", quantization.get("structuralReduction"))
+    if structural_reduction is not False:
+        raise ValueError("mixed precision policy structuralReduction must be false")
+
+    layer_count = int(policy.get("layerCount") or policy.get("architecture", {}).get("layers") or 24)
+    if layer_count <= 0:
+        raise ValueError("mixed precision policy layerCount must be positive")
+
+    protected_edge_layer_count = int(policy.get("protectedEdgeLayerCount", 2))
+    if protected_edge_layer_count < 0:
+        raise ValueError("mixed precision policy protectedEdgeLayerCount must be non-negative")
+
+    op_name_patterns = {
+        component: list(DEFAULT_OP_NAME_PATTERNS[component])
+        for component in MIXED_POLICY_COMPONENTS
+    }
+    for component, patterns in (policy.get("opNamePatterns") or {}).items():
+        if component not in op_name_patterns:
+            raise ValueError(f"unsupported mixed precision opNamePatterns component: {component}")
+        if not isinstance(patterns, list) or not all(isinstance(pattern, str) and pattern for pattern in patterns):
+            raise ValueError(f"mixed precision policy opNamePatterns.{component} must be a non-empty string array")
+        op_name_patterns[component] = patterns
+
+    layer_overrides = parse_layer_overrides(policy.get("layerOverrides") or {}, layer_count)
+
+    return {
+        "schemaVersion": policy.get("schemaVersion", 1),
+        "policyId": policy.get("policyId") or policy.get("quantizationPolicyId") or "mixed-int4-ffn-int8-attn-kv",
+        "strategy": strategy,
+        "layerCount": layer_count,
+        "protectedEdgeLayerCount": min(protected_edge_layer_count, layer_count),
+        "weights": normalized_weights,
+        "kvCache": kv_cache,
+        "structuralReduction": structural_reduction,
+        "opNamePatterns": op_name_patterns,
+        "layerOverrides": layer_overrides,
+    }
+
+
+def parse_layer_overrides(raw_overrides: Any, layer_count: int) -> dict[str, dict[int, str]]:
+    if raw_overrides == {}:
+        return {}
+    if not isinstance(raw_overrides, dict):
+        raise ValueError("mixed precision policy layerOverrides must be an object")
+
+    overrides: dict[str, dict[int, str]] = {}
+    for component, component_overrides in raw_overrides.items():
+        if component not in TRANSFORMER_COMPONENTS:
+            raise ValueError(f"mixed precision policy layerOverrides.{component} is not supported")
+        if not isinstance(component_overrides, dict):
+            raise ValueError(f"mixed precision policy layerOverrides.{component} must be an object")
+
+        parsed_component: dict[int, str] = {}
+        for raw_layer, raw_precision in component_overrides.items():
+            try:
+                layer = int(raw_layer)
+            except ValueError as error:
+                raise ValueError(f"mixed precision policy layerOverrides.{component} layer must be an integer") from error
+            if layer < 0 or layer >= layer_count:
+                raise ValueError(f"mixed precision policy layerOverrides.{component}.{layer} is outside layer count")
+            if raw_precision not in SUPPORTED_MIXED_PRECISIONS:
+                raise ValueError(
+                    f"mixed precision policy layerOverrides.{component}.{layer} must be fp16, int8, or int4"
+                )
+            parsed_component[layer] = raw_precision
+        overrides[component] = parsed_component
+    return overrides
+
+
+def build_mixed_compression_plan(policy: dict[str, Any]) -> dict[str, Any]:
+    layer_precision = {
+        str(layer): {
+            component: precision_for_component(policy, component, layer)
+            for component in TRANSFORMER_COMPONENTS
+        }
+        for layer in range(policy["layerCount"])
+    }
+    compression_passes = [
+        {
+            "precision": "int8",
+            "method": "linear_symmetric",
+            "opNamePatterns": op_patterns_for_precision(policy, "int8", layer_precision),
+        },
+        {
+            "precision": "int4",
+            "method": "kmeans_palettization",
+            "opNamePatterns": op_patterns_for_precision(policy, "int4", layer_precision),
+        },
+    ]
+    compression_passes = [pass_ for pass_ in compression_passes if pass_["opNamePatterns"]]
+
+    return {
+        "policyId": policy["policyId"],
+        "strategy": policy["strategy"],
+        "layerCount": policy["layerCount"],
+        "protectedEdgeLayerCount": policy["protectedEdgeLayerCount"],
+        "componentPrecision": policy["weights"],
+        "layerOverrides": {
+            component: {str(layer): precision for layer, precision in sorted(overrides.items())}
+            for component, overrides in policy.get("layerOverrides", {}).items()
+        },
+        "layerPrecision": layer_precision,
+        "kvCachePrecision": policy["kvCache"],
+        "structuralReduction": policy["structuralReduction"],
+        "compressionPasses": compression_passes,
+    }
+
+
+def new_mixed_compression_audit(policy: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "policyId": policy["policyId"],
+        "passes": {
+            "int8": new_mixed_compression_pass_audit(),
+            "int4": new_mixed_compression_pass_audit(),
+        },
+    }
+
+
+def new_mixed_compression_pass_audit() -> dict[str, Any]:
+    return {
+        "selectedOpCount": 0,
+        "rejectedOpCount": 0,
+        "selectedByComponent": {},
+        "selectedByLayer": {},
+        "selectedSampleOpNames": [],
+    }
+
+
+def record_mixed_compression_audit(
+    audit: dict[str, Any] | None,
+    target_precision: str,
+    op_name: str,
+    component: str | None,
+    layer: int | None,
+    selected: bool,
+) -> None:
+    if audit is None:
+        return
+
+    pass_audit = audit["passes"][target_precision]
+    if not selected:
+        pass_audit["rejectedOpCount"] += 1
+        return
+
+    pass_audit["selectedOpCount"] += 1
+    if component is not None:
+        selected_by_component = pass_audit["selectedByComponent"]
+        selected_by_component[component] = selected_by_component.get(component, 0) + 1
+    if layer is not None:
+        selected_by_layer = pass_audit["selectedByLayer"]
+        layer_key = str(layer)
+        selected_by_layer[layer_key] = selected_by_layer.get(layer_key, 0) + 1
+    if len(pass_audit["selectedSampleOpNames"]) < 20:
+        pass_audit["selectedSampleOpNames"].append(op_name)
+
+
+def op_patterns_for_precision(
+    policy: dict[str, Any],
+    precision: str,
+    layer_precision: dict[str, dict[str, str]],
+) -> list[str]:
+    patterns: list[str] = []
+    for component in MIXED_POLICY_COMPONENTS:
+        component_precision = policy["weights"][component]
+        layer_uses_precision = any(
+            layer.get(component) == precision
+            for layer in layer_precision.values()
+        )
+        if component_precision == precision or layer_uses_precision:
+            patterns.extend(policy["opNamePatterns"][component])
+    return sorted(set(patterns))
+
+
+def precision_for_component(policy: dict[str, Any], component: str, layer: int | None = None) -> str:
+    precision = policy["weights"][component]
+    if layer is None or component not in TRANSFORMER_COMPONENTS:
+        return precision
+
+    precision = policy.get("layerOverrides", {}).get(component, {}).get(layer, precision)
+    if is_protected_layer(policy, layer):
+        return raise_precision_to_int8(precision)
+    return precision
+
+
+def is_protected_layer(policy: dict[str, Any], layer: int) -> bool:
+    protected_count = policy["protectedEdgeLayerCount"]
+    layer_count = policy["layerCount"]
+    return layer < protected_count or layer >= layer_count - protected_count
+
+
+def raise_precision_to_int8(precision: str) -> str:
+    return "int8" if precision == "int4" else precision
+
+
+def compress_coreml_package(
+    mlpackage_path: Path,
+    output_dir: Path,
+    compression: str,
+    mixed_policy: dict[str, Any] | None = None,
+) -> tuple[Path, dict[str, Any] | None]:
     from coremltools.optimize.coreml import (
         OpLinearQuantizerConfig,
         OpPalettizerConfig,
@@ -419,14 +714,84 @@ def compress_coreml_package(mlpackage_path: Path, output_dir: Path, compression:
     if compression == "int8":
         config = OptimizationConfig(global_config=OpLinearQuantizerConfig(mode="linear_symmetric"))
         compressed = linear_quantize_weights(model, config=config)
+        compression_audit = None
     elif compression == "int4":
         config = OptimizationConfig(global_config=OpPalettizerConfig(mode="kmeans", nbits=4))
         compressed = palettize_weights(model, config=config)
+        compression_audit = None
+    elif compression == "mixed":
+        if mixed_policy is None:
+            raise ValueError("mixed compression requires a precision policy")
+        compression_audit = new_mixed_compression_audit(mixed_policy)
+        compressed = ct.compression_utils.affine_quantize_weights(
+            model,
+            mode="linear_symmetric",
+            dtype=np.int8,
+            op_selector=make_mixed_precision_op_selector(mixed_policy, "int8", compression_audit),
+        )
+        compressed = ct.compression_utils.palettize_weights(
+            compressed,
+            mode="kmeans",
+            nbits=4,
+            op_selector=make_mixed_precision_op_selector(mixed_policy, "int4", compression_audit),
+        )
     else:
         raise ValueError(f"Unsupported compression: {compression}")
 
     compressed.save(str(compressed_path))
-    return compressed_path
+    return compressed_path, compression_audit
+
+
+def make_mixed_precision_op_selector(
+    policy: dict[str, Any],
+    target_precision: str,
+    audit: dict[str, Any] | None = None,
+):
+    def selector(op) -> bool:
+        name = getattr(op, "name", "")
+        component = classify_component_from_op_name(name, policy["opNamePatterns"])
+        if component is None:
+            record_mixed_compression_audit(audit, target_precision, name, component, None, False)
+            return False
+        layer = extract_layer_index(name)
+        selected = precision_for_component(policy, component, layer) == target_precision
+        record_mixed_compression_audit(audit, target_precision, name, component, layer, selected)
+        return selected
+
+    return selector
+
+
+def classify_component_from_op_name(name: str, op_name_patterns: dict[str, list[str]]) -> str | None:
+    for component in MIXED_POLICY_COMPONENTS:
+        for pattern in op_name_patterns[component]:
+            if pattern_matches_name(pattern, name):
+                return component
+    return None
+
+
+def pattern_matches_name(pattern: str, name: str) -> bool:
+    lowered_name = name.lower()
+    lowered_pattern = pattern.lower()
+    if lowered_pattern in lowered_name:
+        return True
+    return normalize_op_name_token(lowered_pattern) in normalize_op_name_token(lowered_name)
+
+
+def normalize_op_name_token(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
+
+
+def extract_layer_index(name: str) -> int | None:
+    lowered_name = name.lower()
+    for pattern in (
+        r"(?:^|[._/\-])layers?[._/\-]?(\d+)(?:[._/\-]|$)",
+        r"(?:^|[._/\-])blocks?[._/\-]?(\d+)(?:[._/\-]|$)",
+        r"(?:^|[._/\-])h[._/\-]?(\d+)(?:[._/\-]|$)",
+    ):
+        match = re.search(pattern, lowered_name)
+        if match:
+            return int(match.group(1))
+    return None
 
 
 def directory_size(path: Path) -> int:

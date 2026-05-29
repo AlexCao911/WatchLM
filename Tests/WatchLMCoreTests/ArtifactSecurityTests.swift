@@ -12,6 +12,25 @@ import Testing
     #expect(digest == "3137b156710585c5773fa1b9f83a0ad78e550e82f09e32439db0d48b71490345")
 }
 
+@Test func artifactDigestComputesStableDirectorySHA256Hex() throws {
+    let firstPackage = try makePackageDirectory(files: [
+        "Manifest.json": "manifest",
+        "weights/weight.bin": "weights"
+    ])
+    let secondPackage = try makePackageDirectory(files: [
+        "weights/weight.bin": "weights",
+        "Manifest.json": "manifest"
+    ])
+
+    let firstDigest = try ArtifactDigest.sha256Hex(for: firstPackage)
+    let secondDigest = try ArtifactDigest.sha256Hex(for: secondPackage)
+
+    #expect(firstDigest == secondDigest)
+
+    try Data("changed".utf8).write(to: secondPackage.appending(path: "weights/weight.bin"))
+    #expect(try ArtifactDigest.sha256Hex(for: secondPackage) != firstDigest)
+}
+
 @Test func modelArtifactVerifierReportsMissingAndMismatchedFiles() throws {
     let directory = try temporaryDirectory()
     let prefillURL = directory.appending(path: "prefill-256.mlpackage")
@@ -47,4 +66,18 @@ private func temporaryDirectory() throws -> URL {
         .appending(path: "watchlm-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return url
+}
+
+private func makePackageDirectory(files: [String: String]) throws -> URL {
+    let packageURL = try temporaryDirectory().appending(path: "model.mlpackage", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
+    for (path, contents) in files {
+        let fileURL = packageURL.appending(path: path)
+        try FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data(contents.utf8).write(to: fileURL)
+    }
+    return packageURL
 }

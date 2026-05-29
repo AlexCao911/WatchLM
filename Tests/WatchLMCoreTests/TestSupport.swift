@@ -6,6 +6,64 @@ func loadSampleManifest() throws -> ModelManifest {
     return try JSONDecoder().decode(ModelManifest.self, from: data)
 }
 
+func makeTemporaryDirectory() throws -> URL {
+    let url = FileManager.default.temporaryDirectory
+        .appending(path: "watchlm-\(UUID().uuidString)", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    return url
+}
+
+func minimalTokenizerJSONData() -> Data {
+    Data(
+        """
+        {
+          "model": {
+            "type": "BPE",
+            "unk_token": "<unk>",
+            "vocab": {
+              "<s>": 0,
+              "</s>": 1,
+              "H": 100,
+              "i": 101,
+              "Hi": 19301,
+              "<unk>": 130074
+            },
+            "merges": [["H", "i"]]
+          },
+          "added_tokens": [
+            {
+              "id": 0,
+              "content": "<s>",
+              "single_word": false,
+              "lstrip": false,
+              "rstrip": false,
+              "normalized": false,
+              "special": true
+            },
+            {
+              "id": 1,
+              "content": "</s>",
+              "single_word": false,
+              "lstrip": false,
+              "rstrip": false,
+              "normalized": false,
+              "special": true
+            },
+            {
+              "id": 130074,
+              "content": "<unk>",
+              "single_word": false,
+              "lstrip": false,
+              "rstrip": false,
+              "normalized": false,
+              "special": true
+            }
+          ]
+        }
+        """.utf8
+    )
+}
+
 private let sampleManifestJSON = """
 {
   "schemaVersion": 1,
@@ -17,7 +75,31 @@ private let sampleManifestJSON = """
   "runtime": {
     "type": "coreml-mlprogram",
     "entrypoints": ["prefill", "decode"],
-    "kvCacheMode": "stateful-preferred"
+    "kvCacheMode": "stateful-preferred",
+    "graphSchema": {
+      "interface": "logits-layered-kv",
+      "layerCount": 24,
+      "kvHeads": 2,
+      "headDimension": 128,
+      "prefill": {
+        "inputIDs": "input_ids",
+        "positionIDs": "position_ids",
+        "causalMask": "causal_mask",
+        "logits": "logits",
+        "keyPrefix": "present_key_",
+        "valuePrefix": "present_value_"
+      },
+      "decode": {
+        "tokenID": "token_id",
+        "positionID": "position_id",
+        "causalMask": "causal_mask",
+        "logits": "logits",
+        "pastKeyPrefix": "past_key_",
+        "pastValuePrefix": "past_value_",
+        "newKeyPrefix": "new_key_",
+        "newValuePrefix": "new_value_"
+      }
+    }
   },
   "architecture": {
     "type": "LlamaForCausalLM",
