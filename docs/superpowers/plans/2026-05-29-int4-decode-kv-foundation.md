@@ -654,6 +654,28 @@ real int8 CLI smoke loadMs 16326.848, firstTokenMs 10900.471, decode 0.11 tokens
 
 Conclusion: benchmark execution is now a first-class Swift path instead of being trapped inside tests. This makes the next optimization loop cleaner: generate a teacher sidecar, run each Core ML artifact policy through the same Swift CLI, then compare size, latency, memory, and token agreement before deciding which policy is worth taking to SE2/SE3 hardware.
 
+## Task 35: Swift CLI Context-16 Artifact Matrix Smoke
+
+- [x] Run the real Core ML Swift benchmark CLI against context-16 global int8.
+- [x] Run the real Core ML Swift benchmark CLI against context-16 mixed FFN12.
+- [x] Run the real Core ML Swift benchmark CLI against context-16 mixed FFN10...13.
+- [x] Run the real Core ML Swift benchmark CLI against context-16 mixed FFN8...15.
+- [x] Use the same PyTorch teacher sidecar, prompt limit, max-new-token cap, tokenizer, and benchmark report schema for all four runs.
+
+Observed:
+
+```text
+policy         total artifact bytes  loadMs     firstTokenMs  decode tok/s  peak RSS MB  token agreement
+int8           2,175,633,967         16326.848  10900.471     0.11          1710.89      1.0
+FFN12          2,154,358,523         15409.565  10372.716     0.11          2725.45      1.0
+FFN10...13     2,090,528,381         16196.665  10052.695     0.10          2829.34      1.0
+FFN8...15      2,005,421,525         17058.381  10537.532     0.10          2817.06      1.0
+generated IDs for all four policies: [18487, 45105]
+generated text for all four policies: "限制回复"
+```
+
+Conclusion: the Swift CLI can now compare real Core ML artifact policies under one report contract. These are macOS host, context-16, one-prompt smoke numbers, so they are useful for verifying the benchmark plumbing and relative artifact metadata, not for claiming Apple Watch SE2/SE3 usable speed. The next quality step is broader teacher sidecars; the next deployment step is context 256/512 artifacts and physical/simulator SE profiling.
+
 ## Next Work
 
 - Generate full-length PyTorch teacher token sidecars for the shared prompt suite.
