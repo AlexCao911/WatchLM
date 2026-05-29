@@ -615,9 +615,27 @@ invalid sidecar errors include schema, source, prompt id, token ids, duplicate i
 
 Conclusion: Swift benchmark inputs can now be evaluated against teacher-token references without relying on a side channel. The remaining work is to generate real PyTorch teacher token sidecars for the shared prompt suite, then run int8, FFN12, FFN10...13, and FFN8...15 through the same Swift runner.
 
+## Task 33: PyTorch Teacher Reference Generator
+
+- [x] Add `tools/benchmark/generate-teacher-references.py` so the shared prompt suite can produce Swift-readable prompt-id keyed teacher token sidecars.
+- [x] Keep a dependency-light `--mock-token-ids` path for CI and schema checks without importing PyTorch or Transformers.
+- [x] Add the real PyTorch teacher path that loads the local `artifacts/hf/MiniCPM5-1B` snapshot and emits greedy generated token IDs.
+- [x] Verify the CLI with a Node smoke test and a one-prompt real MiniCPM5 teacher run.
+
+Observed:
+
+```text
+red test: tools/benchmark/generate-teacher-references.py was missing
+node --test test/teacherReferencesCli.test.js: 1 test passed
+real teacher smoke: zh-short-001 -> token IDs [18487, 45105] with --max-new-tokens 2
+sidecar path: artifacts/benchmarks/minicpm5-teacher-references-smoke.json
+```
+
+Conclusion: the Swift benchmark sidecar no longer has to be hand-authored. We now have a repeatable host tool that can generate teacher references for the shared prompt suite, which is the missing bridge before comparing int8, FFN12, FFN10...13, and FFN8...15 under one benchmark contract.
+
 ## Next Work
 
-- Generate real PyTorch teacher token sidecars for the shared prompt suite.
+- Generate full-length PyTorch teacher token sidecars for the shared prompt suite.
 - Run int8, FFN12, FFN10...13, and FFN8...15 through the Swift prompt suite with those teacher references.
 - Validate slot-ring KV cache invariance against PyTorch/Core ML decode logits on real MiniCPM artifacts, then explore Core ML stateful cache or slice-view strategies if the graph/runtime supports them.
 - Expand Swift tokenizer parity tests across Chinese, English, code, tool tags, and chat-template edge cases.
