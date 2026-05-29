@@ -52,3 +52,40 @@ import Testing
     let writtenReport = try JSONDecoder().decode(RuntimeBenchmarkReport.self, from: Data(contentsOf: outputURL))
     #expect(writtenReport == report)
 }
+
+@Test func runtimeBenchmarkCommandCanSelectPromptIDsInRequestedOrder() async throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let promptsURL = root.appending(path: "tools/benchmark/fixtures/benchmark-prompts.json")
+    let temporaryDirectory = try makeTemporaryDirectory()
+    let referencesURL = temporaryDirectory.appending(path: "teacher-references.json")
+    let outputURL = temporaryDirectory.appending(path: "benchmark-report.json")
+
+    let references = RuntimeBenchmarkQualityReferenceSuite(
+        schemaVersion: 1,
+        source: "mock-teacher",
+        references: [
+            RuntimeBenchmarkPromptQualityReference(promptID: "zh-short-001", tokenIDs: [10, 11]),
+            RuntimeBenchmarkPromptQualityReference(promptID: "watch-utility-001", tokenIDs: [10, 11])
+        ]
+    )
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    try encoder.encode(references).write(to: referencesURL)
+
+    let options = try RuntimeBenchmarkCommandOptions.parse(
+        [
+            "--runtime", "mock",
+            "--prompts", promptsURL.path,
+            "--teacher", referencesURL.path,
+            "--output", outputURL.path,
+            "--prompt-ids", "watch-utility-001,zh-short-001",
+            "--max-new-tokens", "2",
+            "--mock-tokens", "A,B",
+            "--mock-token-ids", "10,11"
+        ]
+    )
+    let report = try await RuntimeBenchmarkCommand(options: options).run()
+
+    #expect(report.promptResults.map(\.promptID) == ["watch-utility-001", "zh-short-001"])
+    #expect(report.summary.averageTokenAgreement == 1.0)
+}

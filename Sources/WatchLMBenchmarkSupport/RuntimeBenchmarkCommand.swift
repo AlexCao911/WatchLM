@@ -28,6 +28,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public var promptsURL: URL
     public var teacherReferencesURL: URL?
     public var outputURL: URL?
+    public var promptIDs: [String]?
     public var promptLimit: Int?
     public var maxNewTokens: Int?
     public var requireAllReferences: Bool
@@ -47,6 +48,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         promptsURL: URL,
         teacherReferencesURL: URL? = nil,
         outputURL: URL? = nil,
+        promptIDs: [String]? = nil,
         promptLimit: Int? = nil,
         maxNewTokens: Int? = nil,
         requireAllReferences: Bool = true,
@@ -65,6 +67,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         self.promptsURL = promptsURL
         self.teacherReferencesURL = teacherReferencesURL
         self.outputURL = outputURL
+        self.promptIDs = promptIDs
         self.promptLimit = promptLimit
         self.maxNewTokens = maxNewTokens
         self.requireAllReferences = requireAllReferences
@@ -98,6 +101,8 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
                 values.teacherReferencesURL = values.resolve(try value(after: argument, in: arguments, at: &index))
             case "--output":
                 values.outputURL = values.resolve(try value(after: argument, in: arguments, at: &index))
+            case "--prompt-ids":
+                values.promptIDs = try parseStringList(value(after: argument, in: arguments, at: &index), option: argument)
             case "--prompt-limit":
                 values.promptLimit = try parsePositiveInt(value(after: argument, in: arguments, at: &index), option: argument)
             case "--max-new-tokens":
@@ -146,6 +151,7 @@ public struct RuntimeBenchmarkCommand: Sendable {
       --prompts PATH                 Prompt suite JSON. Defaults to tools/benchmark/fixtures/benchmark-prompts.json.
       --teacher PATH                 Teacher reference sidecar JSON.
       --output PATH                  Write RuntimeBenchmarkReport JSON to this path. Without it, JSON is printed to stdout.
+      --prompt-ids A,B               Run specific prompt ids in the requested order.
       --prompt-limit N               Run only the first N prompts.
       --max-new-tokens N             Cap each prompt's maxNewTokens for smoke runs.
       --allow-missing-references     Do not require every selected prompt to have teacher tokens.
@@ -185,6 +191,22 @@ public struct RuntimeBenchmarkCommand: Sendable {
     private func loadPrompts() throws -> [RuntimeBenchmarkPrompt] {
         var suite = try RuntimeBenchmarkPromptSuite.load(from: options.promptsURL)
         _ = try suite.validatedPrompts()
+
+        if let promptIDs = options.promptIDs {
+            let promptsByID = Dictionary(uniqueKeysWithValues: suite.prompts.map { prompt in
+                (prompt.id, prompt)
+            })
+            let selectedPrompts = try promptIDs.map { promptID in
+                guard let prompt = promptsByID[promptID] else {
+                    throw RuntimeBenchmarkCommandError.invalidOption("unknown prompt id \(promptID)")
+                }
+                return prompt
+            }
+            suite = RuntimeBenchmarkPromptSuite(
+                schemaVersion: suite.schemaVersion,
+                prompts: selectedPrompts
+            )
+        }
 
         if let promptLimit = options.promptLimit {
             suite = RuntimeBenchmarkPromptSuite(
@@ -328,6 +350,7 @@ private struct ParsedBenchmarkArguments {
     var promptsURL: URL
     var teacherReferencesURL: URL?
     var outputURL: URL?
+    var promptIDs: [String]?
     var promptLimit: Int?
     var maxNewTokens: Int?
     var requireAllReferences = true
@@ -362,6 +385,7 @@ private struct ParsedBenchmarkArguments {
             promptsURL: promptsURL,
             teacherReferencesURL: teacherReferencesURL,
             outputURL: outputURL,
+            promptIDs: promptIDs,
             promptLimit: promptLimit,
             maxNewTokens: maxNewTokens,
             requireAllReferences: requireAllReferences,
