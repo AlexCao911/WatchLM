@@ -676,10 +676,37 @@ generated text for all four policies: "限制回复"
 
 Conclusion: the Swift CLI can now compare real Core ML artifact policies under one report contract. These are macOS host, context-16, one-prompt smoke numbers, so they are useful for verifying the benchmark plumbing and relative artifact metadata, not for claiming Apple Watch SE2/SE3 usable speed. The next quality step is broader teacher sidecars; the next deployment step is context 256/512 artifacts and physical/simulator SE profiling.
 
+## Task 36: Full Prompt Suite Teacher Sidecar
+
+- [x] Run `tools/benchmark/generate-teacher-references.py` against the full shared benchmark prompt suite.
+- [x] Use the local `artifacts/hf/MiniCPM5-1B` PyTorch teacher snapshot without a max-new-token cap.
+- [x] Emit the Swift-readable teacher sidecar to `artifacts/benchmarks/minicpm5-teacher-references-full.json`.
+- [x] Summarize reference-token coverage before using it in Core ML runtime benchmarks.
+
+Observed:
+
+```text
+source: pytorch-teacher-minicpm5
+prompt count: 10
+total reference tokens: 408
+token lengths:
+  zh-short-001: 48
+  zh-short-002: 5
+  en-short-001: 64
+  en-short-002: 42
+  code-fix-001: 48
+  code-fix-002: 40
+  watch-utility-001: 64
+  watch-utility-002: 1
+  safety-refusal-001: 48
+  safety-refusal-002: 48
+```
+
+Conclusion: broad teacher-token coverage now exists locally for the shared Swift benchmark prompt suite. Running the entire sidecar through context-16 Core ML on the macOS host would be slow at the current observed decode speed, so the practical next step is a capped/batched Swift CLI run for policy comparison, then context 256/512 conversion once the artifact size strategy is selected.
+
 ## Next Work
 
-- Generate full-length PyTorch teacher token sidecars for the shared prompt suite.
-- Run int8, FFN12, FFN10...13, and FFN8...15 through the Swift prompt suite with those teacher references.
+- Run int8, FFN12, FFN10...13, and FFN8...15 through capped or batched Swift prompt-suite benchmarks with the full teacher references.
 - Validate slot-ring KV cache invariance against PyTorch/Core ML decode logits on real MiniCPM artifacts, then explore Core ML stateful cache or slice-view strategies if the graph/runtime supports them.
 - Expand Swift tokenizer parity tests across Chinese, English, code, tool tags, and chat-template edge cases.
 - Move from `context=16` to SE2 `context=256` and SE3 `context=512`.
