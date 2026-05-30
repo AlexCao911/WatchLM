@@ -39,6 +39,93 @@ public enum RuntimeBenchmarkCommandError: Error, Equatable, CustomStringConverti
     }
 }
 
+public struct CoreMLDiagnosticPromptResult: Codable, Equatable, Sendable {
+    public var promptID: String
+    public var category: String
+    public var language: String
+    public var promptTokenIDs: [Int32]
+    public var prefillTopK: [TokenLogit]
+    public var decodeTopK: [TokenLogit]
+    public var errorMessage: String?
+
+    public init(
+        promptID: String,
+        category: String,
+        language: String,
+        promptTokenIDs: [Int32] = [],
+        prefillTopK: [TokenLogit] = [],
+        decodeTopK: [TokenLogit] = [],
+        errorMessage: String? = nil
+    ) {
+        self.promptID = promptID
+        self.category = category
+        self.language = language
+        self.promptTokenIDs = promptTokenIDs
+        self.prefillTopK = prefillTopK
+        self.decodeTopK = decodeTopK
+        self.errorMessage = errorMessage
+    }
+
+    public init(prompt: RuntimeBenchmarkPrompt, result: Result<CoreMLPrefillDecodeDiagnosticReport, Error>) {
+        switch result {
+        case .success(let report):
+            self.init(
+                promptID: prompt.id,
+                category: prompt.category,
+                language: prompt.language,
+                promptTokenIDs: report.promptTokenIDs,
+                prefillTopK: report.prefillTopK,
+                decodeTopK: report.decodeTopK
+            )
+        case .failure(let error):
+            self.init(
+                promptID: prompt.id,
+                category: prompt.category,
+                language: prompt.language,
+                errorMessage: String(describing: error)
+            )
+        }
+    }
+
+    public var prefillTokenID: Int32? {
+        prefillTopK.first?.tokenID
+    }
+
+    public var firstDecodeTokenID: Int32? {
+        decodeTopK.first?.tokenID
+    }
+}
+
+public struct CoreMLDiagnosticsSummary: Codable, Equatable, Sendable {
+    public var promptCount: Int
+    public var succeededPromptCount: Int
+    public var failedPromptCount: Int
+
+    public init(promptResults: [CoreMLDiagnosticPromptResult]) {
+        promptCount = promptResults.count
+        failedPromptCount = promptResults.filter { $0.errorMessage != nil }.count
+        succeededPromptCount = promptCount - failedPromptCount
+    }
+}
+
+public struct CoreMLDiagnosticsReport: Codable, Equatable, Sendable {
+    public var configuration: RuntimeBenchmarkConfiguration
+    public var topK: Int
+    public var promptResults: [CoreMLDiagnosticPromptResult]
+    public var summary: CoreMLDiagnosticsSummary
+
+    public init(
+        configuration: RuntimeBenchmarkConfiguration,
+        topK: Int,
+        promptResults: [CoreMLDiagnosticPromptResult]
+    ) {
+        self.configuration = configuration
+        self.topK = topK
+        self.promptResults = promptResults
+        self.summary = CoreMLDiagnosticsSummary(promptResults: promptResults)
+    }
+}
+
 public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public var runtime: RuntimeBenchmarkRuntime
     public var promptsURL: URL
@@ -57,6 +144,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public var decodeModelURL: URL?
     public var tokenizerURL: URL?
     public var coreMLGraphInterface: CoreMLBenchmarkGraphInterface
+    public var diagnosticsTopK: Int?
     public var loadOnly: Bool
     public var coreMLLoadTarget: CoreMLLoadTarget
     public var mockTokens: [String]
@@ -80,6 +168,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         decodeModelURL: URL? = nil,
         tokenizerURL: URL? = nil,
         coreMLGraphInterface: CoreMLBenchmarkGraphInterface = .explicitKV,
+        diagnosticsTopK: Int? = nil,
         loadOnly: Bool = false,
         coreMLLoadTarget: CoreMLLoadTarget = .both,
         mockTokens: [String] = ["A"],
@@ -102,6 +191,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         self.decodeModelURL = decodeModelURL
         self.tokenizerURL = tokenizerURL
         self.coreMLGraphInterface = coreMLGraphInterface
+        self.diagnosticsTopK = diagnosticsTopK
         self.loadOnly = loadOnly
         self.coreMLLoadTarget = coreMLLoadTarget
         self.mockTokens = mockTokens
@@ -155,6 +245,8 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
                 values.coreMLGraphInterface = try CoreMLBenchmarkGraphInterface(
                     rawValue: value(after: argument, in: arguments, at: &index)
                 ).orThrowInvalid("\(argument) must be logits-layered-kv, stateful-kv, or stateful-step-kv")
+            case "--diagnostics-top-k":
+                values.diagnosticsTopK = try parsePositiveInt(value(after: argument, in: arguments, at: &index), option: argument)
             case "--load-only":
                 values.loadOnly = true
             case "--coreml-load-target":
@@ -194,6 +286,7 @@ public struct RuntimeBenchmarkCommand: Sendable {
       --policy-id ID
       --id ID
       --coreml-graph-interface logits-layered-kv|stateful-kv|stateful-step-kv
+      --diagnostics-top-k N        Run Core ML logits diagnostics instead of generation.
       --load-only                  Load runtime artifacts and skip prompt generation.
       --coreml-load-target both|prefill|decode
     """
@@ -219,10 +312,53 @@ public struct RuntimeBenchmarkCommand: Sendable {
         return report
     }
 
+    public func runDiagnostics() throws -> CoreMLDiagnosticsReport {
+        #if canImport(CoreML)
+        guard options.runtime == .coreML else {
+            throw RuntimeBenchmarkCommandError.unsupportedRuntime("Core ML diagnostics require --runtime coreml")
+        }
+        guard let topK = options.diagnosticsTopK else {
+            throw RuntimeBenchmarkCommandError.missingOption("--diagnostics-top-k")
+        }
+
+        let prompts = try loadPrompts()
+        let diagnostics = CoreMLPrefillDecodeDiagnostics(
+            bundle: try makeCoreMLBundle(),
+            tokenizer: try makeCoreMLTokenizer()
+        )
+        let results = prompts.map { prompt in
+            CoreMLDiagnosticPromptResult(
+                prompt: prompt,
+                result: Result {
+                    try diagnostics.run(prompt: prompt.input, topK: topK)
+                }
+            )
+        }
+        let report = CoreMLDiagnosticsReport(
+            configuration: makeConfiguration(),
+            topK: topK,
+            promptResults: results
+        )
+
+        if let outputURL = options.outputURL {
+            try write(diagnosticsReport: report, to: outputURL)
+        }
+        return report
+        #else
+        throw RuntimeBenchmarkCommandError.unsupportedRuntime("Core ML is unavailable on this platform")
+        #endif
+    }
+
     public static func encode(report: RuntimeBenchmarkReport) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try encoder.encode(report)
+    }
+
+    public static func encode(diagnosticsReport: CoreMLDiagnosticsReport) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(diagnosticsReport)
     }
 
     private func loadPrompts() throws -> [RuntimeBenchmarkPrompt] {
@@ -308,19 +444,28 @@ public struct RuntimeBenchmarkCommand: Sendable {
             return try makeCoreMLLoadProbeRuntime()
         }
 
+        return CoreMLPrefillDecodeRuntime(
+            bundle: try makeCoreMLBundle(),
+            tokenizer: try makeCoreMLTokenizer()
+        )
+        #else
+        throw RuntimeBenchmarkCommandError.unsupportedRuntime("Core ML is unavailable on this platform")
+        #endif
+    }
+
+    #if canImport(CoreML)
+    private func makeCoreMLBundle() throws -> CoreMLPrefillDecodeBundle {
         let prefillURL = try requiredURL(options.prefillModelURL, "--prefill")
         let decodeURL = try resolvedCoreMLDecodeURL(prefillURL: prefillURL)
-        let tokenizerURL = try requiredURL(options.tokenizerURL, "--tokenizer")
-        let bundle: CoreMLPrefillDecodeBundle
         switch options.coreMLGraphInterface {
         case .explicitKV:
-            bundle = CoreMLPrefillDecodeBundle.miniCPMExplicitKV(
+            return CoreMLPrefillDecodeBundle.miniCPMExplicitKV(
                 prefillModelURL: prefillURL,
                 decodeModelURL: decodeURL,
                 maxPromptTokens: options.contextVariant
             )
         case .statefulKV:
-            bundle = CoreMLPrefillDecodeBundle(
+            return CoreMLPrefillDecodeBundle(
                 prefillModelURL: prefillURL,
                 decodeModelURL: decodeURL,
                 maxPromptTokens: options.contextVariant,
@@ -329,7 +474,7 @@ public struct RuntimeBenchmarkCommand: Sendable {
                 decodePositionInputName: "position_ids"
             )
         case .statefulStepKV:
-            bundle = CoreMLPrefillDecodeBundle(
+            return CoreMLPrefillDecodeBundle(
                 prefillModelURL: prefillURL,
                 decodeModelURL: decodeURL,
                 maxPromptTokens: options.contextVariant,
@@ -338,16 +483,15 @@ public struct RuntimeBenchmarkCommand: Sendable {
                 decodePositionInputName: "position_ids"
             )
         }
-        return CoreMLPrefillDecodeRuntime(
-            bundle: bundle,
-            tokenizer: try MiniCPMBytePairTokenizer(tokenizerJSONURL: tokenizerURL, addBosToken: true)
-        )
-        #else
-        throw RuntimeBenchmarkCommandError.unsupportedRuntime("Core ML is unavailable on this platform")
-        #endif
     }
 
-    #if canImport(CoreML)
+    private func makeCoreMLTokenizer() throws -> any TextTokenizer {
+        try MiniCPMBytePairTokenizer(
+            tokenizerJSONURL: requiredURL(options.tokenizerURL, "--tokenizer"),
+            addBosToken: true
+        )
+    }
+
     private func makeCoreMLLoadProbeRuntime() throws -> any InferenceRuntime {
         switch options.coreMLLoadTarget {
         case .both:
@@ -433,6 +577,14 @@ public struct RuntimeBenchmarkCommand: Sendable {
         try Self.encode(report: report).write(to: outputURL)
     }
 
+    private func write(diagnosticsReport: CoreMLDiagnosticsReport, to outputURL: URL) throws {
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Self.encode(diagnosticsReport: diagnosticsReport).write(to: outputURL)
+    }
+
     private func displayPath(_ url: URL) -> String {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .standardizedFileURL
@@ -463,6 +615,7 @@ private struct ParsedBenchmarkArguments {
     var decodeModelURL: URL?
     var tokenizerURL: URL?
     var coreMLGraphInterface: CoreMLBenchmarkGraphInterface = .explicitKV
+    var diagnosticsTopK: Int?
     var loadOnly = false
     var coreMLLoadTarget: CoreMLLoadTarget = .both
     var mockTokens = ["A"]
@@ -501,6 +654,7 @@ private struct ParsedBenchmarkArguments {
             decodeModelURL: decodeModelURL,
             tokenizerURL: tokenizerURL,
             coreMLGraphInterface: coreMLGraphInterface,
+            diagnosticsTopK: diagnosticsTopK,
             loadOnly: loadOnly,
             coreMLLoadTarget: coreMLLoadTarget,
             mockTokens: mockTokens,
