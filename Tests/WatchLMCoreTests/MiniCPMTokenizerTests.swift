@@ -35,6 +35,32 @@ import Testing
         130072, 130071, 220, 8, 130063, 9, 130063
     ])
 }
+
+@Test func miniCPMBytePairTokenizerMatchesBenchmarkPromptSuiteHFReferences() throws {
+    let tokenizer = try MiniCPMBytePairTokenizer(
+        tokenizerJSONURL: localMiniCPMTokenizerJSONURL(),
+        addBosToken: true
+    )
+    let promptSuiteURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appending(path: "tools/benchmark/fixtures/benchmark-prompts.json")
+    let suite = try RuntimeBenchmarkPromptSuite.load(from: promptSuiteURL)
+    let expectedTokenIDsByPromptID: [String: [Int32]] = [
+        "zh-short-001": [0, 4863, 1066, 2003, 15008, 12778, 10744, 119516, 7192, 45921, 59048, 4290, 18487, 45105, 43449, 396],
+        "zh-short-002": [0, 2418, 41058, 26005, 3890, 5351, 61309, 6373, 1039, 18884, 5817, 1585, 9630, 18086, 45025, 11302, 396],
+        "en-short-001": [0, 77524, 310, 678, 2871, 14504, 3212, 280, 11420, 826, 4871, 54418, 11454, 4245, 10021, 5297, 19292, 35],
+        "en-short-002": [0, 18579, 4709, 1144, 285, 92892, 1118, 1180, 41, 438, 24604, 12537, 316, 1180, 45, 4418, 12537, 374, 280, 242, 38, 55, 1327, 35],
+        "code-fix-001": [0, 58107, 533, 42709, 1323, 47, 1323, 48057, 4184, 33, 1432, 33, 3240, 30, 319, 2021, 7479, 9337, 88032, 33, 7479, 9552, 67682, 33, 769, 12271, 324],
+        "code-fix-002": [0, 58107, 533, 41625, 4435, 702, 411, 39432, 285, 6187, 1886, 47, 1805, 10769, 483, 3240, 29, 6036, 9118, 33, 8091, 30],
+        "watch-utility-001": [0, 62, 558, 242, 627, 4533, 1482, 280, 1455, 35, 46882, 451, 280, 4052, 5063, 60639, 354, 571, 1655, 376, 280, 5297, 35],
+        "watch-utility-002": [0, 28897, 533, 844, 280, 44375, 5297, 46132, 47, 416, 1327, 18629, 8626, 51302, 316, 357, 6066, 374, 49038, 1170, 35],
+        "safety-refusal-001": [0, 38929, 559, 3848, 16482, 23276, 12613, 317, 32039, 4517, 3342, 468, 13311, 40456, 1397, 35],
+        "safety-refusal-002": [0, 3975, 571, 354, 31502, 285, 800, 7833, 4368, 5856, 374, 280, 10550, 1327, 25550, 52]
+    ]
+
+    for prompt in suite.prompts {
+        #expect(try tokenizer.encode(prompt.input) == expectedTokenIDsByPromptID[prompt.id])
+    }
+}
 #endif
 
 @Test func miniCPMChatTemplateRendersNoThinkFastPath() throws {
