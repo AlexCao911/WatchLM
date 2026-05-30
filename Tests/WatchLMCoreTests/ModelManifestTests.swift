@@ -84,6 +84,21 @@ import Testing
     #expect(manifest.runtime.kvCacheRouteDecision(capabilities: watchOS11).selectedRoute == .statefulKV)
 }
 
+@Test func manifestRuntimeGraphSchemaAcceptsStatefulStepKVInterface() throws {
+    var manifest = try loadSampleManifest()
+    manifest.runtime.graphSchema.interface = "stateful-step-kv"
+    manifest.runtime.graphSchema.decode.tokenID = "input_ids"
+    manifest.runtime.graphSchema.decode.positionID = "position_ids"
+
+    let watchOS11 = CoreMLRuntimeCapabilities(
+        platform: .watchOS,
+        operatingSystemVersion: OperatingSystemVersion(majorVersion: 11, minorVersion: 0, patchVersion: 0)
+    )
+
+    #expect(manifest.validationErrors.isEmpty)
+    #expect(manifest.runtime.kvCacheRouteDecision(capabilities: watchOS11).selectedRoute == .statefulKV)
+}
+
 #if canImport(CoreML)
 @Test func coreMLBundleCanBeBuiltFromManifestGraphSchema() throws {
     let manifest = try loadSampleManifest()
@@ -106,6 +121,24 @@ import Testing
     #expect(bundle.decodeLogitsOutputName == "logits")
     #expect(bundle.decodePastKeyInputName(forLayer: 23) == "past_key_23")
     #expect(bundle.decodeNewValueOutputName(forLayer: 23) == "new_value_23")
+}
+
+@Test func coreMLBundleCanBeBuiltFromStatefulStepGraphSchema() throws {
+    var manifest = try loadSampleManifest()
+    manifest.runtime.graphSchema.interface = "stateful-step-kv"
+    manifest.runtime.graphSchema.decode.tokenID = "input_ids"
+    manifest.runtime.graphSchema.decode.positionID = "position_ids"
+
+    let bundle = try CoreMLPrefillDecodeBundle(
+        prefillModelURL: URL(fileURLWithPath: "/tmp/stateful-step.mlpackage"),
+        decodeModelURL: URL(fileURLWithPath: "/tmp/stateful-step.mlpackage"),
+        maxPromptTokens: 256,
+        graphSchema: manifest.runtime.graphSchema
+    )
+
+    #expect(bundle.graphInterface == .statefulStepKV(layerCount: 24, kvHeads: 2, headDimension: 128))
+    #expect(bundle.decodeTokenInputName == "input_ids")
+    #expect(bundle.decodePositionInputName == "position_ids")
 }
 
 @Test func coreMLRuntimeAssemblerBuildsManifestSelectedRuntimeComponents() throws {
@@ -237,7 +270,7 @@ import Testing
     #expect(manifest.validationErrors.contains("model.id must be openbmb/MiniCPM5-1B"))
     #expect(manifest.validationErrors.contains("runtime.type must be coreml-mlprogram"))
     #expect(manifest.validationErrors.contains("runtime.kvCacheMode must be stateful-preferred, slot-ring, or contiguous-sliding"))
-    #expect(manifest.validationErrors.contains("runtime.graphSchema.interface must be logits-layered-kv or stateful-kv"))
+    #expect(manifest.validationErrors.contains("runtime.graphSchema.interface must be logits-layered-kv, stateful-kv, or stateful-step-kv"))
     #expect(manifest.validationErrors.contains("runtime.graphSchema.prefill.logits must be logits"))
     #expect(manifest.validationErrors.contains("architecture.layers must be 24"))
 }

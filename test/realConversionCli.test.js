@@ -31,6 +31,7 @@ test("real MiniCPM conversion CLI exposes compression and graph choices", async 
   assert.match(stdout, /prefill-kv/);
   assert.match(stdout, /decode/);
   assert.match(stdout, /stateful-kv/);
+  assert.match(stdout, /stateful-step-kv/);
 });
 
 test("stateful KV conversion schema describes 24 Core ML state tensors", async () => {
@@ -95,6 +96,55 @@ print(json.dumps(schema, sort_keys=True))
     shape: [1, 2, 256, 128],
     dtype: "float16"
   });
+});
+
+test("stateful step KV conversion schema uses single-token IO and full state writes", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+config = SimpleNamespace(
+    num_hidden_layers=24,
+    num_key_value_heads=2,
+    num_attention_heads=16,
+    hidden_size=1536,
+    head_dim=128,
+)
+schema = module.stateful_step_kv_graph_schema(config, context_tokens=256)
+input_types = module.input_types(
+    "stateful-step-kv",
+    module.stateful_step_example_inputs(context_tokens=256),
+    config,
+    256,
+)
+state_types = module.state_types("stateful-step-kv", config, 256)
+assert [item.name for item in input_types] == ["input_ids", "position_ids", "causal_mask"]
+assert len(state_types) == 48
+print(json.dumps(schema, sort_keys=True))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const schema = JSON.parse(stdout);
+
+  assert.equal(schema.interface, "stateful-step-kv");
+  assert.equal(schema.layerCount, 24);
+  assert.deepEqual(schema.inputs, ["input_ids", "position_ids", "causal_mask"]);
+  assert.deepEqual(schema.inputShapes, {
+    input_ids: [1, 1],
+    position_ids: [1, 1],
+    causal_mask: [1, 1, 1, 257]
+  });
+  assert.equal(schema.stateUpdate, "sliding-window-full-state-write");
+  assert.equal(schema.states.length, 48);
+  assert.deepEqual(schema.states[0].shape, [1, 2, 256, 128]);
 });
 
 test("real MiniCPM conversion CLI describes mixed precision policy without loading the model", async () => {

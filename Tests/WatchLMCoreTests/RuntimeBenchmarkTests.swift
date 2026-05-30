@@ -277,6 +277,21 @@ private func sampleTeacherReferenceSuite() -> RuntimeBenchmarkQualityReferenceSu
     #expect(configuration.artifact == artifact)
 }
 
+@Test func runtimeBenchmarkArtifactDoesNotDoubleCountSharedStatefulModelPath() throws {
+    let artifact = RuntimeBenchmarkArtifact(
+        quantizationPolicyID: "stateful-step-kv-int4",
+        graphInterface: "stateful-step-kv",
+        prefillModelPath: "Models/MiniCPM5/stateful-step-256.mlmodelc",
+        decodeModelPath: "Models/MiniCPM5/stateful-step-256.mlmodelc",
+        tokenizerPath: "Models/MiniCPM5/tokenizer.json",
+        prefillSizeBytes: 541_414_203,
+        decodeSizeBytes: 541_414_203,
+        tokenizerSizeBytes: 9_894_271
+    )
+
+    #expect(artifact.totalSizeBytes == 551_308_474)
+}
+
 @Test func runtimeBenchmarkRunnerCollectsThermalAndMemoryTelemetry() async throws {
     let runtime = MockStreamingRuntime(tokens: ["A"], firstTokenMs: 10, decodeStepMs: [10])
     let telemetryProbe = SequenceRuntimeTelemetryProbe(snapshots: [

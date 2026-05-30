@@ -19,6 +19,7 @@ public enum CoreMLLoadTarget: String, Codable, Equatable, Sendable {
 public enum CoreMLBenchmarkGraphInterface: String, Codable, Equatable, Sendable {
     case explicitKV = "logits-layered-kv"
     case statefulKV = "stateful-kv"
+    case statefulStepKV = "stateful-step-kv"
 }
 
 public enum RuntimeBenchmarkCommandError: Error, Equatable, CustomStringConvertible, Sendable {
@@ -153,7 +154,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
             case "--coreml-graph-interface":
                 values.coreMLGraphInterface = try CoreMLBenchmarkGraphInterface(
                     rawValue: value(after: argument, in: arguments, at: &index)
-                ).orThrowInvalid("\(argument) must be logits-layered-kv or stateful-kv")
+                ).orThrowInvalid("\(argument) must be logits-layered-kv, stateful-kv, or stateful-step-kv")
             case "--load-only":
                 values.loadOnly = true
             case "--coreml-load-target":
@@ -192,7 +193,7 @@ public struct RuntimeBenchmarkCommand: Sendable {
       --context N
       --policy-id ID
       --id ID
-      --coreml-graph-interface logits-layered-kv|stateful-kv
+      --coreml-graph-interface logits-layered-kv|stateful-kv|stateful-step-kv
       --load-only                  Load runtime artifacts and skip prompt generation.
       --coreml-load-target both|prefill|decode
     """
@@ -327,6 +328,15 @@ public struct RuntimeBenchmarkCommand: Sendable {
                 decodeTokenInputName: "input_ids",
                 decodePositionInputName: "position_ids"
             )
+        case .statefulStepKV:
+            bundle = CoreMLPrefillDecodeBundle(
+                prefillModelURL: prefillURL,
+                decodeModelURL: decodeURL,
+                maxPromptTokens: options.contextVariant,
+                graphInterface: .statefulStepKV(layerCount: 24, kvHeads: 2, headDimension: 128),
+                decodeTokenInputName: "input_ids",
+                decodePositionInputName: "position_ids"
+            )
         }
         return CoreMLPrefillDecodeRuntime(
             bundle: bundle,
@@ -363,11 +373,11 @@ public struct RuntimeBenchmarkCommand: Sendable {
         switch options.coreMLGraphInterface {
         case .explicitKV:
             return try requiredURL(options.decodeModelURL, "--decode")
-        case .statefulKV:
+        case .statefulKV, .statefulStepKV:
             let decodeURL = options.decodeModelURL ?? prefillURL
             guard decodeURL.standardizedFileURL == prefillURL.standardizedFileURL else {
                 throw RuntimeBenchmarkCommandError.invalidOption(
-                    "stateful-kv requires --decode to match --prefill when --decode is provided"
+                    "\(options.coreMLGraphInterface.rawValue) requires --decode to match --prefill when --decode is provided"
                 )
             }
             return prefillURL

@@ -97,7 +97,7 @@ public struct ModelManifest: Codable, Equatable, Sendable {
         let graphSchema = runtime.graphSchema
 
         if !ModelManifestContract.supportedGraphInterfaces.contains(graphSchema.interface) {
-            errors.append("runtime.graphSchema.interface must be logits-layered-kv or stateful-kv")
+            errors.append("runtime.graphSchema.interface must be logits-layered-kv, stateful-kv, or stateful-step-kv")
         }
 
         if graphSchema.layerCount != ModelManifestContract.layers {
@@ -136,12 +136,14 @@ public struct ModelManifest: Codable, Equatable, Sendable {
             errors.append("runtime.graphSchema.prefill.valuePrefix must be \(ModelManifestContract.prefillValuePrefix)")
         }
 
-        if graphSchema.decode.tokenID != ModelManifestContract.decodeTokenID {
-            errors.append("runtime.graphSchema.decode.tokenID must be \(ModelManifestContract.decodeTokenID)")
+        let expectedDecodeTokenID = ModelManifestContract.expectedDecodeTokenID(for: graphSchema.interface)
+        if graphSchema.decode.tokenID != expectedDecodeTokenID {
+            errors.append("runtime.graphSchema.decode.tokenID must be \(expectedDecodeTokenID)")
         }
 
-        if graphSchema.decode.positionID != ModelManifestContract.decodePositionID {
-            errors.append("runtime.graphSchema.decode.positionID must be \(ModelManifestContract.decodePositionID)")
+        let expectedDecodePositionID = ModelManifestContract.expectedDecodePositionID(for: graphSchema.interface)
+        if graphSchema.decode.positionID != expectedDecodePositionID {
+            errors.append("runtime.graphSchema.decode.positionID must be \(expectedDecodePositionID)")
         }
 
         if graphSchema.decode.causalMask != ModelManifestContract.causalMask {
@@ -384,7 +386,12 @@ enum ModelManifestContract {
     static let expectedRuntime = "coreml-mlprogram"
     static let explicitKVGraphInterface = "logits-layered-kv"
     static let statefulKVGraphInterface = "stateful-kv"
-    static let supportedGraphInterfaces = [explicitKVGraphInterface, statefulKVGraphInterface]
+    static let statefulStepKVGraphInterface = "stateful-step-kv"
+    static let supportedGraphInterfaces = [
+        explicitKVGraphInterface,
+        statefulKVGraphInterface,
+        statefulStepKVGraphInterface
+    ]
     static let supportedKVCacheModes = ["stateful-preferred", "slot-ring", "contiguous-sliding"]
     static let layers = 24
     static let hiddenSize = 1536
@@ -404,4 +411,12 @@ enum ModelManifestContract {
     static let decodePastValuePrefix = "past_value_"
     static let decodeNewKeyPrefix = "new_key_"
     static let decodeNewValuePrefix = "new_value_"
+
+    static func expectedDecodeTokenID(for graphInterface: String) -> String {
+        graphInterface == statefulStepKVGraphInterface ? prefillInputIDs : decodeTokenID
+    }
+
+    static func expectedDecodePositionID(for graphInterface: String) -> String {
+        graphInterface == statefulStepKVGraphInterface ? prefillPositionIDs : decodePositionID
+    }
 }

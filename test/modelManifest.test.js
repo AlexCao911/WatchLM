@@ -52,7 +52,8 @@ test("manifest constants encode the fidelity-first MiniCPM5 contract", () => {
   ]);
   assert.deepEqual(SUPPORTED_GRAPH_INTERFACES, [
     "logits-layered-kv",
-    "stateful-kv"
+    "stateful-kv",
+    "stateful-step-kv"
   ]);
   assert.deepEqual(EXPECTED_GRAPH_SCHEMA, {
     interface: "logits-layered-kv",
@@ -108,7 +109,7 @@ test("runtime graph schema must expose logits and layered KV IO names", () => {
   const result = validateModelManifest(manifest);
 
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /runtime\.graphSchema\.interface must be logits-layered-kv or stateful-kv/);
+  assert.match(result.errors.join("\n"), /runtime\.graphSchema\.interface must be logits-layered-kv, stateful-kv, or stateful-step-kv/);
   assert.match(result.errors.join("\n"), /runtime\.graphSchema\.layerCount must be 24/);
   assert.match(result.errors.join("\n"), /runtime\.graphSchema\.prefill\.logits must be logits/);
   assert.match(result.errors.join("\n"), /runtime\.graphSchema\.decode\.pastKeyPrefix must be past_key_/);
@@ -117,6 +118,18 @@ test("runtime graph schema must expose logits and layered KV IO names", () => {
 test("runtime graph schema can declare stateful KV graph interface", () => {
   const manifest = clone(validManifest);
   manifest.runtime.graphSchema.interface = "stateful-kv";
+
+  const result = validateModelManifest(manifest);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test("runtime graph schema can declare stateful step KV graph interface", () => {
+  const manifest = clone(validManifest);
+  manifest.runtime.graphSchema.interface = "stateful-step-kv";
+  manifest.runtime.graphSchema.decode.tokenID = "input_ids";
+  manifest.runtime.graphSchema.decode.positionID = "position_ids";
 
   const result = validateModelManifest(manifest);
 

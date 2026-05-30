@@ -601,6 +601,36 @@ import CoreML
     )
 }
 
+@Test func coreMLStatefulStepKVBundleUsesSingleTokenIO() throws {
+    let bundle = CoreMLPrefillDecodeBundle(
+        prefillModelURL: URL(fileURLWithPath: "/tmp/shared-stateful-step.mlpackage"),
+        decodeModelURL: URL(fileURLWithPath: "/tmp/shared-stateful-step.mlpackage"),
+        maxPromptTokens: 16,
+        graphInterface: .statefulStepKV(layerCount: 24, kvHeads: 2, headDimension: 128),
+        decodeTokenInputName: "input_ids",
+        decodePositionInputName: "position_ids"
+    )
+
+    try bundle.validateGraphIOContract(
+        prefillInputShapes: [
+            "input_ids": [1, 1],
+            "position_ids": [1, 1],
+            "causal_mask": [1, 1, 1, 17]
+        ],
+        prefillOutputShapes: [
+            "logits": [1, 130_560]
+        ],
+        decodeInputShapes: [
+            "input_ids": [1, 1],
+            "position_ids": [1, 1],
+            "causal_mask": [1, 1, 1, 17]
+        ],
+        decodeOutputShapes: [
+            "logits": [1, 130_560]
+        ]
+    )
+}
+
 @Test func coreMLPrefillDecodeBundleCarriesLogitsProcessingPolicy() throws {
     let bundle = CoreMLPrefillDecodeBundle(
         prefillModelURL: URL(fileURLWithPath: "/tmp/prefill.mlpackage"),

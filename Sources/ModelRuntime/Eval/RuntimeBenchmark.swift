@@ -390,12 +390,35 @@ public struct RuntimeBenchmarkArtifact: Codable, Equatable, Sendable {
         self.prefillSizeBytes = prefillSizeBytes
         self.decodeSizeBytes = decodeSizeBytes
         self.tokenizerSizeBytes = tokenizerSizeBytes
-        totalSizeBytes = [prefillSizeBytes, decodeSizeBytes, tokenizerSizeBytes]
-            .compactMap { $0 }
-            .reduce(0, +)
+        totalSizeBytes = Self.uniqueArtifactByteCount(
+            [
+                (prefillModelPath, prefillSizeBytes),
+                (decodeModelPath, decodeSizeBytes),
+                (tokenizerPath, tokenizerSizeBytes),
+            ]
+        )
         self.prefillSHA256 = prefillSHA256
         self.decodeSHA256 = decodeSHA256
         self.tokenizerSHA256 = tokenizerSHA256
+    }
+
+    private static func uniqueArtifactByteCount(_ entries: [(String?, Int64?)]) -> Int64 {
+        var seen = Set<String>()
+        var total: Int64 = 0
+        for (path, size) in entries {
+            guard let path, let size else {
+                continue
+            }
+            var key = path
+            while key.hasSuffix("/") && key.count > 1 {
+                key.removeLast()
+            }
+            guard seen.insert(key).inserted else {
+                continue
+            }
+            total += size
+        }
+        return total
     }
 
     public init(

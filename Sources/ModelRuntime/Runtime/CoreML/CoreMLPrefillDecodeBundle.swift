@@ -6,6 +6,7 @@ public enum CoreMLPrefillDecodeGraphInterface: Equatable, Sendable {
     case tokenAndSingleKV
     case logitsAndLayeredKV(layerCount: Int, kvHeads: Int, headDimension: Int)
     case statefulKV(layerCount: Int, kvHeads: Int, headDimension: Int)
+    case statefulStepKV(layerCount: Int, kvHeads: Int, headDimension: Int)
 }
 
 public struct CoreMLPrefillDecodeBundle: Sendable {
@@ -115,6 +116,12 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
                 kvHeads: graphSchema.kvHeads,
                 headDimension: graphSchema.headDimension
             )
+        case "stateful-step-kv":
+            graphInterface = .statefulStepKV(
+                layerCount: graphSchema.layerCount,
+                kvHeads: graphSchema.kvHeads,
+                headDimension: graphSchema.headDimension
+            )
         default:
             throw InferenceRuntimeError.invalidInput(message: "Unsupported Core ML graph interface \(graphSchema.interface).")
         }
@@ -145,10 +152,12 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
     }
 
     public var requiresSharedStatefulModel: Bool {
-        if case .statefulKV = graphInterface {
+        switch graphInterface {
+        case .statefulKV, .statefulStepKV:
             return true
+        case .tokenAndSingleKV, .logitsAndLayeredKV:
+            return false
         }
-        return false
     }
 
     public static func miniCPMExplicitKV(
@@ -310,7 +319,7 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
                 decodeInputs: [decodeTokenInputName, decodeKVCacheInputName],
                 decodeOutputs: [decodeNextTokenOutputName, decodeKVCacheOutputName]
             )
-        case .statefulKV:
+        case .statefulKV, .statefulStepKV:
             return (
                 prefillInputs: [
                     prefillInputName,
@@ -392,6 +401,25 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
                 decodeOutputs: [
                     decodeNextTokenOutputName: [1],
                     decodeKVCacheOutputName: [1]
+                ]
+            )
+        case .statefulStepKV:
+            return (
+                prefillInputs: [
+                    prefillInputName: [1, 1],
+                    prefillPositionInputName: [1, 1],
+                    prefillCausalMaskInputName: [1, 1, 1, maxPromptTokens + 1]
+                ],
+                prefillOutputs: [
+                    prefillLogitsOutputName: [1, nil]
+                ],
+                decodeInputs: [
+                    decodeTokenInputName: [1, 1],
+                    decodePositionInputName: [1, 1],
+                    decodeCausalMaskInputName: [1, 1, 1, maxPromptTokens + 1]
+                ],
+                decodeOutputs: [
+                    decodeLogitsOutputName: [1, nil]
                 ]
             )
         case .statefulKV:
@@ -488,7 +516,7 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
                     decodeKVCacheOutputName: [.double]
                 ]
             )
-        case .statefulKV:
+        case .statefulKV, .statefulStepKV:
             let floatingLogits: [MLMultiArrayDataType] = [.float16, .float32, .double]
             return (
                 prefillInputs: [

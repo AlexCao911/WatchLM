@@ -174,15 +174,16 @@ public enum CoreMLKVCacheRoutePlanner {
     ) -> CoreMLKVCacheRouteDecision {
         switch kvCacheMode {
         case "stateful-preferred":
-            if graphInterface == "stateful-kv", !capabilities.supportsStatefulPrediction {
+            let isStatefulGraph = graphInterface == "stateful-kv" || graphInterface == "stateful-step-kv"
+            if isStatefulGraph, !capabilities.supportsStatefulPrediction {
                 return CoreMLKVCacheRouteDecision(
                     requestedMode: kvCacheMode,
                     selectedRoute: .unsupportedStatefulKV,
-                    reason: "Artifact graph interface stateful-kv requires Core ML stateful prediction on \(capabilities.platform.rawValue)."
+                    reason: "Artifact graph interface \(graphInterface ?? "stateful") requires Core ML stateful prediction on \(capabilities.platform.rawValue)."
                 )
             }
 
-            if let graphInterface, graphInterface != "stateful-kv" {
+            if let graphInterface, !isStatefulGraph {
                 return CoreMLKVCacheRouteDecision(
                     requestedMode: kvCacheMode,
                     selectedRoute: .explicitSlotRing,

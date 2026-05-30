@@ -135,3 +135,24 @@ import Testing
     #expect(options.decodeModelURL == nil)
     #expect(options.contextVariant == 256)
 }
+
+@Test func runtimeBenchmarkCommandParsesStatefulStepCoreMLGraphInterface() throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let modelURL = root.appending(path: "Models/MiniCPM5/stateful-step-256.mlmodelc")
+    let tokenizerURL = root.appending(path: "Models/MiniCPM5/tokenizer.json")
+
+    let options = try RuntimeBenchmarkCommandOptions.parse(
+        [
+            "--runtime", "coreml",
+            "--prefill", modelURL.path,
+            "--tokenizer", tokenizerURL.path,
+            "--coreml-graph-interface", "stateful-step-kv",
+            "--context", "256"
+        ],
+        currentDirectory: root
+    )
+
+    #expect(options.coreMLGraphInterface == .statefulStepKV)
+    #expect(options.prefillModelURL == modelURL)
+    #expect(options.decodeModelURL == nil)
+}

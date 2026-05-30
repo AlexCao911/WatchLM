@@ -7,7 +7,8 @@ export const SUPPORTED_KV_CACHE_MODES = Object.freeze([
 ]);
 export const SUPPORTED_GRAPH_INTERFACES = Object.freeze([
   "logits-layered-kv",
-  "stateful-kv"
+  "stateful-kv",
+  "stateful-step-kv"
 ]);
 export const EXPECTED_MODEL_ID = "openbmb/MiniCPM5-1B";
 export const EXPECTED_RUNTIME = "coreml-mlprogram";
@@ -183,11 +184,22 @@ function validateRuntimeGraphSchema(graphSchema, errors) {
     }
   }
   if (!SUPPORTED_GRAPH_INTERFACES.includes(graphSchema.interface)) {
-    errors.push("runtime.graphSchema.interface must be logits-layered-kv or stateful-kv");
+    errors.push("runtime.graphSchema.interface must be logits-layered-kv, stateful-kv, or stateful-step-kv");
   }
 
   validateNamedSchema("runtime.graphSchema.prefill", graphSchema.prefill, EXPECTED_GRAPH_SCHEMA.prefill, errors);
-  validateNamedSchema("runtime.graphSchema.decode", graphSchema.decode, EXPECTED_GRAPH_SCHEMA.decode, errors);
+  validateNamedSchema("runtime.graphSchema.decode", graphSchema.decode, expectedDecodeSchema(graphSchema.interface), errors);
+}
+
+function expectedDecodeSchema(graphInterface) {
+  if (graphInterface === "stateful-step-kv") {
+    return {
+      ...EXPECTED_GRAPH_SCHEMA.decode,
+      tokenID: "input_ids",
+      positionID: "position_ids"
+    };
+  }
+  return EXPECTED_GRAPH_SCHEMA.decode;
 }
 
 function validateNamedSchema(path, schema, expectedSchema, errors) {

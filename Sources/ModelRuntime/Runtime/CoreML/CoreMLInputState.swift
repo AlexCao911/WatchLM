@@ -118,6 +118,10 @@ struct CoreMLMiniCPMInputState {
         return array
     }
 
+    var statefulStepCausalMask: MLMultiArray {
+        decodeCausalMask
+    }
+
     var decodePositionID: MLMultiArray {
         let array = try! MLMultiArray(shape: [1, 1], dataType: .int32)
         array[0] = NSNumber(value: nextPositionIDValue)
