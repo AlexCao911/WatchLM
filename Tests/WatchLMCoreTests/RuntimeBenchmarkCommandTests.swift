@@ -90,6 +90,33 @@ import Testing
     #expect(report.summary.averageTokenAgreement == 1.0)
 }
 
+@Test func runtimeBenchmarkCommandCanRunCalibrationPromptSuite() async throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let calibrationPromptsURL = root.appending(path: "tools/benchmark/fixtures/calibration-prompts.json")
+    let temporaryDirectory = try makeTemporaryDirectory()
+    let outputURL = temporaryDirectory.appending(path: "calibration-benchmark-report.json")
+
+    let options = try RuntimeBenchmarkCommandOptions.parse(
+        [
+            "--runtime", "mock",
+            "--calibration-prompts", calibrationPromptsURL.path,
+            "--output", outputURL.path,
+            "--prompt-ids", "cal-watch-utility-001,cal-zh-short-001",
+            "--max-new-tokens", "2",
+            "--mock-tokens", "A,B",
+            "--mock-token-ids", "10,11"
+        ],
+        currentDirectory: root
+    )
+    let report = try await RuntimeBenchmarkCommand(options: options).run()
+
+    #expect(options.calibrationPromptsURL == calibrationPromptsURL)
+    #expect(report.promptResults.map(\.promptID) == ["cal-watch-utility-001", "cal-zh-short-001"])
+    #expect(report.promptResults.allSatisfy { $0.generatedTokenIDs == [10, 11] })
+    #expect(report.summary.promptCount == 2)
+    #expect(FileManager.default.fileExists(atPath: outputURL.path))
+}
+
 @Test func runtimeBenchmarkCommandCanRunLoadOnlyBenchmarkWithoutPrompts() async throws {
     let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     let promptsURL = root.appending(path: "tools/benchmark/fixtures/benchmark-prompts.json")

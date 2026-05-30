@@ -114,6 +114,9 @@ public struct RuntimeBenchmarkPromptSuite: Codable, Equatable, Sendable {
         "watch_utility",
         "safety_refusal"
     ]
+    public static let supportedCategories = requiredCategories + [
+        "stop_sequence"
+    ]
 
     private static let supportedSchemaVersion = 1
     private static let maxSmokePromptTokens = 256
@@ -165,7 +168,7 @@ public struct RuntimeBenchmarkPromptSuite: Codable, Equatable, Sendable {
                 seenIDs.insert(trimmedID)
             }
 
-            if Self.requiredCategories.contains(prompt.category) {
+            if Self.supportedCategories.contains(prompt.category) {
                 seenCategories.insert(prompt.category)
             } else {
                 errors.append("prompt[\(index)].category is unsupported")

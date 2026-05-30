@@ -150,6 +150,7 @@ public struct CoreMLDiagnosticsReport: Codable, Equatable, Sendable {
 public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public var runtime: RuntimeBenchmarkRuntime
     public var promptsURL: URL
+    public var calibrationPromptsURL: URL?
     public var teacherReferencesURL: URL?
     public var outputURL: URL?
     public var promptIDs: [String]?
@@ -177,6 +178,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public init(
         runtime: RuntimeBenchmarkRuntime = .coreML,
         promptsURL: URL,
+        calibrationPromptsURL: URL? = nil,
         teacherReferencesURL: URL? = nil,
         outputURL: URL? = nil,
         promptIDs: [String]? = nil,
@@ -203,6 +205,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     ) {
         self.runtime = runtime
         self.promptsURL = promptsURL
+        self.calibrationPromptsURL = calibrationPromptsURL
         self.teacherReferencesURL = teacherReferencesURL
         self.outputURL = outputURL
         self.promptIDs = promptIDs
@@ -246,6 +249,8 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
                     .orThrowInvalid("\(argument) must be mock or coreml")
             case "--prompts":
                 values.promptsURL = values.resolve(try value(after: argument, in: arguments, at: &index))
+            case "--calibration-prompts":
+                values.calibrationPromptsURL = values.resolve(try value(after: argument, in: arguments, at: &index))
             case "--teacher":
                 values.teacherReferencesURL = values.resolve(try value(after: argument, in: arguments, at: &index))
             case "--output":
@@ -319,6 +324,7 @@ public struct RuntimeBenchmarkCommand: Sendable {
 
     Options:
       --prompts PATH                 Prompt suite JSON. Defaults to tools/benchmark/fixtures/benchmark-prompts.json.
+      --calibration-prompts PATH     Quantization calibration suite JSON. Replaces --prompts.
       --teacher PATH                 Teacher reference sidecar JSON.
       --output PATH                  Write RuntimeBenchmarkReport JSON to this path. Without it, JSON is printed to stdout.
       --prompt-ids A,B               Run specific prompt ids in the requested order.
@@ -462,7 +468,7 @@ public struct RuntimeBenchmarkCommand: Sendable {
     }
 
     private func loadPrompts() throws -> [RuntimeBenchmarkPrompt] {
-        var suite = try RuntimeBenchmarkPromptSuite.load(from: options.promptsURL)
+        var suite = try loadPromptSuite()
         _ = try suite.validatedPrompts()
 
         if let promptIDs = options.promptIDs {
@@ -524,6 +530,20 @@ public struct RuntimeBenchmarkCommand: Sendable {
             )
         }
         return suite.prompts
+    }
+
+    private func loadPromptSuite() throws -> RuntimeBenchmarkPromptSuite {
+        guard let calibrationPromptsURL = options.calibrationPromptsURL else {
+            return try RuntimeBenchmarkPromptSuite.load(from: options.promptsURL)
+        }
+
+        let calibrationSuite = try QuantizationCalibrationSuite
+            .load(from: calibrationPromptsURL)
+            .validated()
+        return RuntimeBenchmarkPromptSuite(
+            schemaVersion: 1,
+            prompts: calibrationSuite.benchmarkPrompts()
+        )
     }
 
     #if canImport(CoreML)
@@ -742,6 +762,7 @@ public struct RuntimeBenchmarkCommand: Sendable {
 private struct ParsedBenchmarkArguments {
     var runtime: RuntimeBenchmarkRuntime = .coreML
     var promptsURL: URL
+    var calibrationPromptsURL: URL?
     var teacherReferencesURL: URL?
     var outputURL: URL?
     var promptIDs: [String]?
@@ -784,6 +805,7 @@ private struct ParsedBenchmarkArguments {
         RuntimeBenchmarkCommandOptions(
             runtime: runtime,
             promptsURL: promptsURL,
+            calibrationPromptsURL: calibrationPromptsURL,
             teacherReferencesURL: teacherReferencesURL,
             outputURL: outputURL,
             promptIDs: promptIDs,
