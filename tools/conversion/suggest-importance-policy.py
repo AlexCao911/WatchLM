@@ -23,6 +23,7 @@ def main() -> None:
         candidate_count=args.candidate_count,
         protected_edge_layer_count=args.protected_edge_layer_count,
         explicit_excluded_layers=parse_layer_list(args.exclude_layers),
+        max_top_column_fraction=args.max_top_column_fraction,
         policy_id=args.policy_id,
     )
     encoded = json.dumps(policy, indent=2, sort_keys=True)
@@ -42,6 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--candidate-count", type=int, default=4)
     parser.add_argument("--protected-edge-layer-count", type=int, default=4)
     parser.add_argument("--exclude-layers", default="")
+    parser.add_argument("--max-top-column-fraction", type=float)
     parser.add_argument("--policy-id")
     parser.add_argument("--output")
     return parser.parse_args()
@@ -53,6 +55,7 @@ def suggest_policy(
     candidate_count: int,
     protected_edge_layer_count: int,
     explicit_excluded_layers: set[int],
+    max_top_column_fraction: float | None = None,
     policy_id: str | None = None,
 ) -> dict[str, Any]:
     if component not in SUPPORTED_COMPONENTS:
@@ -64,11 +67,29 @@ def suggest_policy(
 
     layers = sorted(report["layerSummary"], key=lambda item: int(item["layerIndex"]))
     layer_count = (max(int(item["layerIndex"]) for item in layers) + 1) if layers else 24
-    excluded_layers = protected_layers(layer_count, protected_edge_layer_count) | explicit_excluded_layers
-    candidates = candidate_layers(layers, component, candidate_count, excluded_layers)
+    static_excluded_layers = protected_layers(layer_count, protected_edge_layer_count) | explicit_excluded_layers
+    layer_risk = component_layer_risk(report.get("modules", []), component)
+    risk_excluded_layers = risk_excluded(layer_risk, max_top_column_fraction)
+    excluded_layers = static_excluded_layers | risk_excluded_layers
+    candidates = candidate_layers(layers, component, candidate_count, excluded_layers, layer_risk)
 
     selected_overrides = {str(item["layerIndex"]): "int4" for item in candidates}
     resolved_policy_id = policy_id or f"importance-{component}-low{len(candidates)}-int4-rest-fp16"
+    ranking = "lowest_component_activation_energy"
+    if max_top_column_fraction is not None:
+        ranking = "lowest_component_activation_energy_with_channel_risk_filter"
+    candidate_evidence: dict[str, Any] = {
+        "sourceReport": report.get("_path"),
+        "sourcePromptCount": report.get("calibration", {}).get("promptCount"),
+        "component": component,
+        "ranking": ranking,
+        "excludedLayers": sorted(excluded_layers),
+        "selectedLayers": candidates,
+    }
+    if max_top_column_fraction is not None:
+        candidate_evidence["channelRisk"] = {
+            "maxTopColumnEnergyFraction": max_top_column_fraction,
+        }
     return {
         "schemaVersion": 1,
         "policyId": resolved_policy_id,
@@ -81,14 +102,7 @@ def suggest_policy(
         },
         "kvCache": "fp16",
         "structuralReduction": False,
-        "candidateEvidence": {
-            "sourceReport": report.get("_path"),
-            "sourcePromptCount": report.get("calibration", {}).get("promptCount"),
-            "component": component,
-            "ranking": "lowest_component_activation_energy",
-            "excludedLayers": sorted(excluded_layers),
-            "selectedLayers": candidates,
-        },
+        "candidateEvidence": candidate_evidence,
     }
 
 
@@ -97,6 +111,7 @@ def candidate_layers(
     component: str,
     candidate_count: int,
     excluded_layers: set[int],
+    layer_risk: dict[int, float],
 ) -> list[dict[str, Any]]:
     ranked = []
     for layer in layer_summary:
@@ -106,13 +121,40 @@ def candidate_layers(
         energy = float(layer.get("componentTotals", {}).get(component, 0.0))
         if energy <= 0:
             continue
-        ranked.append(
-            {
-                "layerIndex": layer_index,
-                "componentActivationEnergy": energy,
-            }
-        )
+        candidate = {
+            "layerIndex": layer_index,
+            "componentActivationEnergy": energy,
+        }
+        if layer_index in layer_risk:
+            candidate["maxTopColumnEnergyFraction"] = layer_risk[layer_index]
+        ranked.append(candidate)
     return sorted(ranked, key=lambda item: (item["componentActivationEnergy"], item["layerIndex"]))[:candidate_count]
+
+
+def component_layer_risk(modules: list[dict[str, Any]], component: str) -> dict[int, float]:
+    risks: dict[int, float] = {}
+    for module in modules:
+        if module.get("component") != component or module.get("layerIndex") is None:
+            continue
+        channel_summary = module.get("channelSummary") or {}
+        fraction = channel_summary.get("topColumnEnergyFraction")
+        if fraction is None:
+            continue
+        layer_index = int(module["layerIndex"])
+        risks[layer_index] = max(risks.get(layer_index, 0.0), float(fraction))
+    return risks
+
+
+def risk_excluded(layer_risk: dict[int, float], max_top_column_fraction: float | None) -> set[int]:
+    if max_top_column_fraction is None:
+        return set()
+    if max_top_column_fraction <= 0:
+        raise ValueError("max_top_column_fraction must be positive")
+    return {
+        layer_index
+        for layer_index, fraction in layer_risk.items()
+        if fraction > max_top_column_fraction
+    }
 
 
 def protected_layers(layer_count: int, edge_count: int) -> set[int]:

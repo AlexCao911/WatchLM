@@ -82,6 +82,56 @@ test("importance policy suggestion chooses low-energy layers and preserves prote
   assert.equal(plan.layerPrecision["4"].attentionV, "fp16");
 });
 
+test("importance policy suggestion can filter concentrated channel outliers", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "watchlm-policy-risk-"));
+  const reportPath = path.join(tempDir, "importance-groups.json");
+  await writeFile(reportPath, JSON.stringify(sampleGroupedImportanceReport()), "utf8");
+
+  const { stdout } = await execFileAsync(python, [
+    suggestionScript,
+    "--importance-report",
+    reportPath,
+    "--component",
+    "attentionV",
+    "--candidate-count",
+    "3",
+    "--protected-edge-layer-count",
+    "1",
+    "--exclude-layers",
+    "4",
+    "--max-top-column-fraction",
+    "0.05",
+    "--policy-id",
+    "importance-attention-v-low3-low-concentration"
+  ], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const policy = JSON.parse(stdout);
+
+  assert.deepEqual(policy.layerOverrides, {
+    attentionV: {
+      3: "int4",
+      5: "int4",
+      6: "int4"
+    }
+  });
+  assert.equal(policy.candidateEvidence.ranking, "lowest_component_activation_energy_with_channel_risk_filter");
+  assert.deepEqual(policy.candidateEvidence.excludedLayers, [0, 1, 2, 4, 7]);
+  assert.deepEqual(policy.candidateEvidence.channelRisk, {
+    maxTopColumnEnergyFraction: 0.05
+  });
+  assert.deepEqual(policy.candidateEvidence.selectedLayers.map((item) => ({
+    layerIndex: item.layerIndex,
+    componentActivationEnergy: item.componentActivationEnergy,
+    maxTopColumnEnergyFraction: item.maxTopColumnEnergyFraction
+  })), [
+    { layerIndex: 3, componentActivationEnergy: 10, maxTopColumnEnergyFraction: 0.01 },
+    { layerIndex: 5, componentActivationEnergy: 30, maxTopColumnEnergyFraction: 0.02 },
+    { layerIndex: 6, componentActivationEnergy: 40, maxTopColumnEnergyFraction: 0.03 }
+  ]);
+});
+
 function sampleImportanceReport() {
   return {
     schemaVersion: 1,
@@ -104,11 +154,47 @@ function sampleImportanceReport() {
   };
 }
 
+function sampleGroupedImportanceReport() {
+  const report = sampleImportanceReport();
+  report.layerSummary = [
+    layer(0, { attentionV: 1 }),
+    layer(1, { attentionV: 2 }),
+    layer(2, { attentionV: 20 }),
+    layer(3, { attentionV: 10 }),
+    layer(4, { attentionV: 0.5 }),
+    layer(5, { attentionV: 30 }),
+    layer(6, { attentionV: 40 }),
+    layer(7, { attentionV: 4 })
+  ];
+  report.modules = [
+    module("model.layers.1.self_attn.v_proj", "attentionV", 1, 2, 0.2),
+    module("model.layers.2.self_attn.v_proj", "attentionV", 2, 20, 0.2),
+    module("model.layers.3.self_attn.v_proj", "attentionV", 3, 10, 0.01),
+    module("model.layers.5.self_attn.v_proj", "attentionV", 5, 30, 0.02),
+    module("model.layers.6.self_attn.v_proj", "attentionV", 6, 40, 0.03)
+  ];
+  return report;
+}
+
 function layer(layerIndex, componentTotals) {
   return {
     layerIndex,
     moduleCount: 1,
     totalActivationEnergy: Object.values(componentTotals).reduce((total, value) => total + value, 0),
     componentTotals
+  };
+}
+
+function module(name, component, layerIndex, totalActivationEnergy, topColumnEnergyFraction) {
+  return {
+    name,
+    component,
+    layerIndex,
+    totalActivationEnergy,
+    channelSummary: {
+      maxColumnEnergy: totalActivationEnergy * topColumnEnergyFraction,
+      topColumnEnergyFraction,
+      topColumnsEnergyFraction: topColumnEnergyFraction
+    }
   };
 }
