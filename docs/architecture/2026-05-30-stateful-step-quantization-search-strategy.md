@@ -148,6 +148,14 @@ decision:           the adjacent-layer attention failure is primarily in Q/K/O,
                     not in V
 ```
 
+Layer10-13 V-only int4:
+
+```text
+quality: 1.0 token agreement on en-short-001
+prefix:  top-5 membership matches fp16 at every tested prefix
+decision: V-only is stable across a four-layer middle window
+```
+
 ## Current Intuition
 
 The current Core ML post-conversion kmeans palettization appears much riskier
@@ -164,11 +172,11 @@ Protect:
   edge-layer attention until proven safe
 
 Expand first:
-  middle-layer attention projections
+  middle-layer V projections
 
 Split if drift appears:
-  Q/K/O-only vs V-only
-  calibrated/groupwise candidates before wider windows
+  Q/K-only vs O-only if Q/K/O compression must be recovered
+  activation-aware sensitivity scoring before retrying FFN
 ```
 
 ## Next Candidates
@@ -184,6 +192,7 @@ The next work should therefore pivot to evidence-led candidates:
 calibration set + sensitivity scorer
 per-tensor / per-projection error metrics
 V-only expansion as the immediate safe attention subcomponent
+layer8-15 V-only as the next expansion check
 Q/K-only vs O-only if Q/K/O compression must be recovered
 groupwise or importance-aware int4 before retrying FFN or wider attention
 ```

@@ -124,6 +124,7 @@ Attention int4:
   layer11-12 grouped-channel no-scale: fails
   layer11-12 Q/K/O-only: fails
   layer11-12 V-only: passes
+  layer10-13 V-only: passes
 ```
 
 ## Updated Search Rules
@@ -173,6 +174,10 @@ attribution, not another layer-window expansion.
 Projection attribution has now found a positive axis: V-only int4 across
 layer11-12 preserves teacher smoke and prefix top-5 membership, while Q/K/O-only
 collapses at prefix 2. The next expansion should be V-only, not whole attention.
+
+The layer10-13 V-only expansion also preserves teacher smoke and prefix top-5
+membership. This strengthens V-only as the first attention subcomponent worth
+widening before batch-prompt promotion.
 
 Parallel to this, WatchLM should plan a calibrated quantization path rather than
 relying only on Core ML post-conversion palettization:

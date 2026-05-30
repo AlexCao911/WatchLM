@@ -122,6 +122,12 @@ Q/K/O-only: fails at prefix 2 and teacher smoke
 V-only:     passes all tested prefixes and teacher smoke
 ```
 
+Layer10-13 V-only:
+
+```text
+V-only: passes all tested prefixes and teacher smoke
+```
+
 ## Updated Interpretation
 
 The layer11-12 attention failure is no longer best explained as:
@@ -138,24 +144,24 @@ Which subprojection actually causes the adjacent-layer failure?
 ```
 
 That question now has a useful answer: Q/K/O is the sensitive side, while V is
-locally safe across layers 11-12.
+locally safe across layers 11-12 and remains stable across layers 10-13.
 
 ## Next Experiments
 
-1. V-only layer10-13 int4
+1. V-only layer8-15 int4
 
 Question:
 
 ```text
-Can the safe V-only axis expand from layer11-12 to a slightly wider middle
-window?
+Can the safe V-only axis expand from a four-layer middle window to a wider
+middle band?
 ```
 
 Why this is useful:
 
 ```text
-It is the first attention subcomponent with direct positive evidence across an
-adjacent middle-layer pair.
+It is the first attention subcomponent with direct positive evidence across
+adjacent middle-layer pairs and a four-layer window.
 ```
 
 2. Q/K-only versus O-only
@@ -228,7 +234,7 @@ Do not widen whole attention windows. Widen only along the safe V-only axis:
 
 ```text
 layer10-13 V-only int4
-layer8-15 V-only int4 only if layer10-13 passes
+layer8-15 V-only int4
 ```
 
 If V-only expansion fails, pause attention windowing and build the
