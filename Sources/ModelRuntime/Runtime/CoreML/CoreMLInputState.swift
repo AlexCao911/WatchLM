@@ -7,18 +7,23 @@ struct CoreMLMiniCPMInputState {
     let positionIDs: MLMultiArray
     let causalMask: MLMultiArray
     private(set) var tokenMask: [Bool]
+    private let statefulPrefillTokenIDs: [Int32]
+    private(set) var statefulTokenCount: Int
     private var nextPositionIDValue: Int
 
     init(
         tokenIDs: [Int32],
         capacity: Int,
+        reservedGeneratedTokenSlots: Int = 0,
         padTokenID: Int32 = MiniCPMSpecialTokens.padTokenID
     ) throws {
         guard capacity > 0 else {
             throw InferenceRuntimeError.invalidInput(message: "maxPromptTokens must be positive.")
         }
 
-        let suffix = Array(tokenIDs.suffix(capacity))
+        let reservedSlots = min(max(reservedGeneratedTokenSlots, 0), capacity - 1)
+        let promptCapacity = capacity - reservedSlots
+        let suffix = Array(tokenIDs.suffix(promptCapacity))
         let paddingCount = capacity - suffix.count
         var paddedTokens = Array(repeating: padTokenID, count: paddingCount)
         paddedTokens.append(contentsOf: suffix)
@@ -33,6 +38,8 @@ struct CoreMLMiniCPMInputState {
             dataType: .float16
         )
         self.tokenMask = tokenMask
+        statefulPrefillTokenIDs = suffix
+        statefulTokenCount = suffix.count
         nextPositionIDValue = suffix.count
 
         var runningPosition = -1
@@ -54,7 +61,61 @@ struct CoreMLMiniCPMInputState {
     }
 
     var realTokenCount: Int {
-        tokenMask.filter { $0 }.count
+        statefulTokenCount
+    }
+
+    var hasStatefulDecodeCapacity: Bool {
+        statefulTokenCount < tokenMask.count
+    }
+
+    var statefulPrefillInputIDs: MLMultiArray {
+        let array = try! MLMultiArray(
+            shape: [1, NSNumber(value: statefulPrefillTokenIDs.count)],
+            dataType: .int32
+        )
+        for (index, tokenID) in statefulPrefillTokenIDs.enumerated() {
+            array[[0, index] as [NSNumber]] = NSNumber(value: tokenID)
+        }
+        return array
+    }
+
+    var statefulPrefillPositionIDs: MLMultiArray {
+        let array = try! MLMultiArray(
+            shape: [1, NSNumber(value: statefulPrefillTokenIDs.count)],
+            dataType: .int32
+        )
+        for index in 0..<statefulPrefillTokenIDs.count {
+            array[[0, index] as [NSNumber]] = NSNumber(value: index)
+        }
+        return array
+    }
+
+    var statefulPrefillCausalMask: MLMultiArray {
+        let tokenCount = statefulPrefillTokenIDs.count
+        let array = try! MLMultiArray(
+            shape: [1, 1, NSNumber(value: tokenCount), NSNumber(value: tokenCount)],
+            dataType: .float16
+        )
+
+        for queryIndex in 0..<tokenCount {
+            for keyIndex in 0..<tokenCount {
+                array[[0, 0, queryIndex, keyIndex] as [NSNumber]] = NSNumber(value: keyIndex <= queryIndex ? 0 : -65504)
+            }
+        }
+        return array
+    }
+
+    var statefulDecodeCausalMask: MLMultiArray {
+        let keyCount = statefulTokenCount + 1
+        let array = try! MLMultiArray(
+            shape: [1, 1, 1, NSNumber(value: keyCount)],
+            dataType: .float16
+        )
+
+        for keyIndex in 0..<keyCount {
+            array[[0, 0, 0, keyIndex] as [NSNumber]] = NSNumber(value: 0)
+        }
+        return array
     }
 
     var decodePositionID: MLMultiArray {
@@ -84,6 +145,7 @@ struct CoreMLMiniCPMInputState {
 
         tokenMask.removeFirst()
         tokenMask.append(true)
+        statefulTokenCount = min(statefulTokenCount + 1, tokenMask.count)
         nextPositionIDValue += 1
     }
 
@@ -93,6 +155,7 @@ struct CoreMLMiniCPMInputState {
         }
 
         tokenMask[slotIndex] = true
+        statefulTokenCount = min(statefulTokenCount + 1, tokenMask.count)
         nextPositionIDValue += 1
     }
 }

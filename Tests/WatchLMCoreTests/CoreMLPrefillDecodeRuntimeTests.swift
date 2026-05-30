@@ -75,7 +75,7 @@ import CoreML
     let bundle = CoreMLPrefillDecodeBundle(
         prefillModelURL: modelURL,
         decodeModelURL: modelURL,
-        maxPromptTokens: 1,
+        maxPromptTokens: 4,
         graphInterface: .statefulKV(layerCount: 1, kvHeads: 1, headDimension: 1),
         decodeTokenInputName: "input_ids",
         decodePositionInputName: "position_ids"
@@ -1067,6 +1067,37 @@ import CoreML
     #expect(state.causalMask[[0, 0, 0, 1] as [NSNumber]].doubleValue == -65504)
     #expect(state.causalMask[[0, 0, 3, 2] as [NSNumber]].doubleValue == 0)
     #expect(state.causalMask[[0, 0, 3, 1] as [NSNumber]].doubleValue == -65504)
+}
+
+@Test func miniCPMInputStateBuildsCompactStatefulPrefillAndDecodeMasks() throws {
+    var state = try CoreMLMiniCPMInputState(
+        tokenIDs: [7, 8, 9, 10],
+        capacity: 4,
+        reservedGeneratedTokenSlots: 1,
+        padTokenID: 1
+    )
+
+    #expect(state.realTokenCount == 3)
+    #expect(state.hasStatefulDecodeCapacity)
+    #expect(state.statefulPrefillInputIDs.shape.map(\.intValue) == [1, 3])
+    #expect(state.statefulPrefillPositionIDs.shape.map(\.intValue) == [1, 3])
+    #expect(state.statefulPrefillCausalMask.shape.map(\.intValue) == [1, 1, 3, 3])
+    #expect(state.statefulPrefillInputIDs[[0, 0] as [NSNumber]].int32Value == 8)
+    #expect(state.statefulPrefillInputIDs[[0, 1] as [NSNumber]].int32Value == 9)
+    #expect(state.statefulPrefillInputIDs[[0, 2] as [NSNumber]].int32Value == 10)
+    #expect(state.statefulPrefillPositionIDs[[0, 0] as [NSNumber]].int32Value == 0)
+    #expect(state.statefulPrefillPositionIDs[[0, 2] as [NSNumber]].int32Value == 2)
+    #expect(state.statefulPrefillCausalMask[[0, 0, 0, 1] as [NSNumber]].doubleValue == -65504)
+    #expect(state.statefulPrefillCausalMask[[0, 0, 2, 1] as [NSNumber]].doubleValue == 0)
+    #expect(state.statefulDecodeCausalMask.shape.map(\.intValue) == [1, 1, 1, 4])
+    #expect(state.statefulDecodeCausalMask[[0, 0, 0, 0] as [NSNumber]].doubleValue == 0)
+    #expect(state.statefulDecodeCausalMask[[0, 0, 0, 3] as [NSNumber]].doubleValue == 0)
+
+    state.appendGeneratedToken()
+
+    #expect(state.realTokenCount == 4)
+    #expect(!state.hasStatefulDecodeCapacity)
+    #expect(state.statefulDecodeCausalMask.shape.map(\.intValue) == [1, 1, 1, 5])
 }
 
 @Test func miniCPMInputStateAdvancesDecodePositionAndMaskAfterGeneratedToken() throws {

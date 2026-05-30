@@ -16,6 +16,11 @@ public enum CoreMLLoadTarget: String, Codable, Equatable, Sendable {
     case decode
 }
 
+public enum CoreMLBenchmarkGraphInterface: String, Codable, Equatable, Sendable {
+    case explicitKV = "logits-layered-kv"
+    case statefulKV = "stateful-kv"
+}
+
 public enum RuntimeBenchmarkCommandError: Error, Equatable, CustomStringConvertible, Sendable {
     case missingOption(String)
     case invalidOption(String)
@@ -50,6 +55,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public var prefillModelURL: URL?
     public var decodeModelURL: URL?
     public var tokenizerURL: URL?
+    public var coreMLGraphInterface: CoreMLBenchmarkGraphInterface
     public var loadOnly: Bool
     public var coreMLLoadTarget: CoreMLLoadTarget
     public var mockTokens: [String]
@@ -72,6 +78,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         prefillModelURL: URL? = nil,
         decodeModelURL: URL? = nil,
         tokenizerURL: URL? = nil,
+        coreMLGraphInterface: CoreMLBenchmarkGraphInterface = .explicitKV,
         loadOnly: Bool = false,
         coreMLLoadTarget: CoreMLLoadTarget = .both,
         mockTokens: [String] = ["A"],
@@ -93,6 +100,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         self.prefillModelURL = prefillModelURL
         self.decodeModelURL = decodeModelURL
         self.tokenizerURL = tokenizerURL
+        self.coreMLGraphInterface = coreMLGraphInterface
         self.loadOnly = loadOnly
         self.coreMLLoadTarget = coreMLLoadTarget
         self.mockTokens = mockTokens
@@ -142,6 +150,10 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
                 values.decodeModelURL = values.resolve(try value(after: argument, in: arguments, at: &index))
             case "--tokenizer":
                 values.tokenizerURL = values.resolve(try value(after: argument, in: arguments, at: &index))
+            case "--coreml-graph-interface":
+                values.coreMLGraphInterface = try CoreMLBenchmarkGraphInterface(
+                    rawValue: value(after: argument, in: arguments, at: &index)
+                ).orThrowInvalid("\(argument) must be logits-layered-kv or stateful-kv")
             case "--load-only":
                 values.loadOnly = true
             case "--coreml-load-target":
@@ -180,6 +192,7 @@ public struct RuntimeBenchmarkCommand: Sendable {
       --context N
       --policy-id ID
       --id ID
+      --coreml-graph-interface logits-layered-kv|stateful-kv
       --load-only                  Load runtime artifacts and skip prompt generation.
       --coreml-load-target both|prefill|decode
     """
@@ -295,13 +308,26 @@ public struct RuntimeBenchmarkCommand: Sendable {
         }
 
         let prefillURL = try requiredURL(options.prefillModelURL, "--prefill")
-        let decodeURL = try requiredURL(options.decodeModelURL, "--decode")
+        let decodeURL = try resolvedCoreMLDecodeURL(prefillURL: prefillURL)
         let tokenizerURL = try requiredURL(options.tokenizerURL, "--tokenizer")
-        let bundle = CoreMLPrefillDecodeBundle.miniCPMExplicitKV(
-            prefillModelURL: prefillURL,
-            decodeModelURL: decodeURL,
-            maxPromptTokens: options.contextVariant
-        )
+        let bundle: CoreMLPrefillDecodeBundle
+        switch options.coreMLGraphInterface {
+        case .explicitKV:
+            bundle = CoreMLPrefillDecodeBundle.miniCPMExplicitKV(
+                prefillModelURL: prefillURL,
+                decodeModelURL: decodeURL,
+                maxPromptTokens: options.contextVariant
+            )
+        case .statefulKV:
+            bundle = CoreMLPrefillDecodeBundle(
+                prefillModelURL: prefillURL,
+                decodeModelURL: decodeURL,
+                maxPromptTokens: options.contextVariant,
+                graphInterface: .statefulKV(layerCount: 24, kvHeads: 2, headDimension: 128),
+                decodeTokenInputName: "input_ids",
+                decodePositionInputName: "position_ids"
+            )
+        }
         return CoreMLPrefillDecodeRuntime(
             bundle: bundle,
             tokenizer: try MiniCPMBytePairTokenizer(tokenizerJSONURL: tokenizerURL, addBosToken: true)
@@ -315,21 +341,38 @@ public struct RuntimeBenchmarkCommand: Sendable {
     private func makeCoreMLLoadProbeRuntime() throws -> any InferenceRuntime {
         switch options.coreMLLoadTarget {
         case .both:
+            let prefillURL = try requiredURL(options.prefillModelURL, "--prefill")
             return CoreMLLoadProbeRuntime(modelURLs: [
-                try requiredURL(options.prefillModelURL, "--prefill"),
-                try requiredURL(options.decodeModelURL, "--decode")
+                prefillURL,
+                try resolvedCoreMLDecodeURL(prefillURL: prefillURL)
             ])
         case .prefill:
             return CoreMLLoadProbeRuntime(modelURLs: [
                 try requiredURL(options.prefillModelURL, "--prefill")
             ])
         case .decode:
+            let prefillURL = try requiredURL(options.prefillModelURL, "--prefill")
             return CoreMLLoadProbeRuntime(modelURLs: [
-                try requiredURL(options.decodeModelURL, "--decode")
+                try resolvedCoreMLDecodeURL(prefillURL: prefillURL)
             ])
         }
     }
     #endif
+
+    private func resolvedCoreMLDecodeURL(prefillURL: URL) throws -> URL {
+        switch options.coreMLGraphInterface {
+        case .explicitKV:
+            return try requiredURL(options.decodeModelURL, "--decode")
+        case .statefulKV:
+            let decodeURL = options.decodeModelURL ?? prefillURL
+            guard decodeURL.standardizedFileURL == prefillURL.standardizedFileURL else {
+                throw RuntimeBenchmarkCommandError.invalidOption(
+                    "stateful-kv requires --decode to match --prefill when --decode is provided"
+                )
+            }
+            return prefillURL
+        }
+    }
 
     private func makeConfiguration() -> RuntimeBenchmarkConfiguration {
         RuntimeBenchmarkConfiguration(
@@ -353,16 +396,16 @@ public struct RuntimeBenchmarkCommand: Sendable {
 
     private func makeArtifact() -> RuntimeBenchmarkArtifact? {
         guard options.runtime == .coreML,
-              let prefillURL = options.prefillModelURL,
-              let decodeURL = options.decodeModelURL
+              let prefillURL = options.prefillModelURL
         else {
             return nil
         }
 
+        let decodeURL = (try? resolvedCoreMLDecodeURL(prefillURL: prefillURL)) ?? options.decodeModelURL ?? prefillURL
         let tokenizerURL = options.tokenizerURL
         return RuntimeBenchmarkArtifact(
             quantizationPolicyID: options.policyID,
-            graphInterface: "logits-layered-kv",
+            graphInterface: options.coreMLGraphInterface.rawValue,
             prefillModelPath: displayPath(prefillURL),
             decodeModelPath: displayPath(decodeURL),
             tokenizerPath: tokenizerURL.map(displayPath),
@@ -409,6 +452,7 @@ private struct ParsedBenchmarkArguments {
     var prefillModelURL: URL?
     var decodeModelURL: URL?
     var tokenizerURL: URL?
+    var coreMLGraphInterface: CoreMLBenchmarkGraphInterface = .explicitKV
     var loadOnly = false
     var coreMLLoadTarget: CoreMLLoadTarget = .both
     var mockTokens = ["A"]
@@ -446,6 +490,7 @@ private struct ParsedBenchmarkArguments {
             prefillModelURL: prefillModelURL,
             decodeModelURL: decodeModelURL,
             tokenizerURL: tokenizerURL,
+            coreMLGraphInterface: coreMLGraphInterface,
             loadOnly: loadOnly,
             coreMLLoadTarget: coreMLLoadTarget,
             mockTokens: mockTokens,

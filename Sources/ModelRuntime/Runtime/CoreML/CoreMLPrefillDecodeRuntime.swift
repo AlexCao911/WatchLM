@@ -227,7 +227,8 @@ public final class CoreMLPrefillDecodeRuntime: StreamingInferenceRuntime, @unche
 
         var inputState = try CoreMLMiniCPMInputState(
             tokenIDs: promptTokens,
-            capacity: bundle.maxPromptTokens
+            capacity: bundle.maxPromptTokens,
+            reservedGeneratedTokenSlots: max(request.maxNewTokens - 1, 0)
         )
         var emittedTokenIDs: [Int32] = []
         var emittedText: [String] = []
@@ -246,9 +247,9 @@ public final class CoreMLPrefillDecodeRuntime: StreamingInferenceRuntime, @unche
 
         let prefillStarted = Date()
         let prefillInput = try CoreMLDictionaryFeatureProvider(features: [
-            bundle.prefillInputName: MLFeatureValue(multiArray: inputState.inputIDs),
-            bundle.prefillPositionInputName: MLFeatureValue(multiArray: inputState.positionIDs),
-            bundle.prefillCausalMaskInputName: MLFeatureValue(multiArray: inputState.causalMask)
+            bundle.prefillInputName: MLFeatureValue(multiArray: inputState.statefulPrefillInputIDs),
+            bundle.prefillPositionInputName: MLFeatureValue(multiArray: inputState.statefulPrefillPositionIDs),
+            bundle.prefillCausalMaskInputName: MLFeatureValue(multiArray: inputState.statefulPrefillCausalMask)
         ])
         let prefillOutput = try await statefulPrediction(
             model: models.prefill,
@@ -279,12 +280,16 @@ public final class CoreMLPrefillDecodeRuntime: StreamingInferenceRuntime, @unche
             if shouldCancel() {
                 throw InferenceRuntimeError.cancelled(partialTokens: emittedText)
             }
+            guard inputState.hasStatefulDecodeCapacity else {
+                terminationReason = .maxTokens
+                break
+            }
 
             let decodeStarted = Date()
             let decodeInput = try CoreMLDictionaryFeatureProvider(features: [
                 bundle.decodeTokenInputName: MLFeatureValue(multiArray: try tokenIDArray(nextTokenID)),
                 bundle.decodePositionInputName: MLFeatureValue(multiArray: inputState.decodePositionID),
-                bundle.decodeCausalMaskInputName: MLFeatureValue(multiArray: inputState.decodeCausalMask)
+                bundle.decodeCausalMaskInputName: MLFeatureValue(multiArray: inputState.statefulDecodeCausalMask)
             ])
             let decodeOutput = try await statefulPrediction(
                 model: models.decode,
