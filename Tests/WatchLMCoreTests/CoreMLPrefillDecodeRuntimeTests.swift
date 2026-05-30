@@ -148,6 +148,32 @@ import CoreML
     #expect(report.promptTokenIDs == [2])
 }
 
+@Test func coreMLPrefillDecodeDiagnosticsCanRunTokenIDPrefix() throws {
+    guard #available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *) else {
+        return
+    }
+
+    let modelURL = try #require(smokeModelURL(named: "SmokeStatefulKV"))
+    let bundle = CoreMLPrefillDecodeBundle(
+        prefillModelURL: modelURL,
+        decodeModelURL: modelURL,
+        maxPromptTokens: 1,
+        graphInterface: .statefulStepKV(layerCount: 1, kvHeads: 1, headDimension: 1),
+        decodeTokenInputName: "input_ids",
+        decodePositionInputName: "position_ids"
+    )
+
+    let report = try CoreMLPrefillDecodeDiagnostics(
+        bundle: bundle,
+        tokenizer: FixtureTokenIDTokenizer()
+    ).run(tokenIDs: [2], topK: 2)
+
+    #expect(report.promptTokenIDs == [2])
+    #expect(report.prefillTokenID == 5)
+    #expect(report.firstDecodeTokenID == 6)
+    #expect(report.prefillTopK.count == 2)
+}
+
 #if os(macOS)
 @Test func coreMLPrefillDecodeRuntimeCanRunLocalRealMiniCPMInt8Artifacts() async throws {
     guard ProcessInfo.processInfo.environment["WATCHLM_RUN_REAL_COREML_TESTS"] == "1" else {

@@ -36,11 +36,13 @@ public struct CoreMLPrefillDecodeDiagnostics {
     }
 
     public func run(prompt: String, topK: Int = 10) throws -> CoreMLPrefillDecodeDiagnosticReport {
+        try run(tokenIDs: tokenizer.encode(prompt), topK: topK)
+    }
+
+    public func run(tokenIDs promptTokenIDs: [Int32], topK: Int = 10) throws -> CoreMLPrefillDecodeDiagnosticReport {
         guard topK > 0 else {
             throw InferenceRuntimeError.invalidInput(message: "topK must be positive.")
         }
-
-        let promptTokenIDs = try tokenizer.encode(prompt)
 
         switch bundle.graphInterface {
         case .logitsAndLayeredKV(let layerCount, _, _):

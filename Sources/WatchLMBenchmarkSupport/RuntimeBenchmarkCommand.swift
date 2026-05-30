@@ -44,6 +44,9 @@ public struct CoreMLDiagnosticPromptResult: Codable, Equatable, Sendable {
     public var category: String
     public var language: String
     public var promptTokenIDs: [Int32]
+    public var requestedPrefixTokenCount: Int?
+    public var prefixTokenCount: Int
+    public var sourcePromptTokenCount: Int?
     public var prefillTopK: [TokenLogit]
     public var decodeTopK: [TokenLogit]
     public var errorMessage: String?
@@ -53,6 +56,9 @@ public struct CoreMLDiagnosticPromptResult: Codable, Equatable, Sendable {
         category: String,
         language: String,
         promptTokenIDs: [Int32] = [],
+        requestedPrefixTokenCount: Int? = nil,
+        prefixTokenCount: Int? = nil,
+        sourcePromptTokenCount: Int? = nil,
         prefillTopK: [TokenLogit] = [],
         decodeTopK: [TokenLogit] = [],
         errorMessage: String? = nil
@@ -61,12 +67,21 @@ public struct CoreMLDiagnosticPromptResult: Codable, Equatable, Sendable {
         self.category = category
         self.language = language
         self.promptTokenIDs = promptTokenIDs
+        self.requestedPrefixTokenCount = requestedPrefixTokenCount
+        self.prefixTokenCount = prefixTokenCount ?? promptTokenIDs.count
+        self.sourcePromptTokenCount = sourcePromptTokenCount
         self.prefillTopK = prefillTopK
         self.decodeTopK = decodeTopK
         self.errorMessage = errorMessage
     }
 
-    public init(prompt: RuntimeBenchmarkPrompt, result: Result<CoreMLPrefillDecodeDiagnosticReport, Error>) {
+    public init(
+        prompt: RuntimeBenchmarkPrompt,
+        requestedPrefixTokenCount: Int? = nil,
+        prefixTokenCount: Int? = nil,
+        sourcePromptTokenCount: Int? = nil,
+        result: Result<CoreMLPrefillDecodeDiagnosticReport, Error>
+    ) {
         switch result {
         case .success(let report):
             self.init(
@@ -74,6 +89,9 @@ public struct CoreMLDiagnosticPromptResult: Codable, Equatable, Sendable {
                 category: prompt.category,
                 language: prompt.language,
                 promptTokenIDs: report.promptTokenIDs,
+                requestedPrefixTokenCount: requestedPrefixTokenCount,
+                prefixTokenCount: prefixTokenCount,
+                sourcePromptTokenCount: sourcePromptTokenCount,
                 prefillTopK: report.prefillTopK,
                 decodeTopK: report.decodeTopK
             )
@@ -82,6 +100,9 @@ public struct CoreMLDiagnosticPromptResult: Codable, Equatable, Sendable {
                 promptID: prompt.id,
                 category: prompt.category,
                 language: prompt.language,
+                requestedPrefixTokenCount: requestedPrefixTokenCount,
+                prefixTokenCount: prefixTokenCount,
+                sourcePromptTokenCount: sourcePromptTokenCount,
                 errorMessage: String(describing: error)
             )
         }
@@ -145,6 +166,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public var tokenizerURL: URL?
     public var coreMLGraphInterface: CoreMLBenchmarkGraphInterface
     public var diagnosticsTopK: Int?
+    public var diagnosticsPrefixLengths: [Int]?
     public var loadOnly: Bool
     public var coreMLLoadTarget: CoreMLLoadTarget
     public var mockTokens: [String]
@@ -169,6 +191,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         tokenizerURL: URL? = nil,
         coreMLGraphInterface: CoreMLBenchmarkGraphInterface = .explicitKV,
         diagnosticsTopK: Int? = nil,
+        diagnosticsPrefixLengths: [Int]? = nil,
         loadOnly: Bool = false,
         coreMLLoadTarget: CoreMLLoadTarget = .both,
         mockTokens: [String] = ["A"],
@@ -192,6 +215,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         self.tokenizerURL = tokenizerURL
         self.coreMLGraphInterface = coreMLGraphInterface
         self.diagnosticsTopK = diagnosticsTopK
+        self.diagnosticsPrefixLengths = diagnosticsPrefixLengths
         self.loadOnly = loadOnly
         self.coreMLLoadTarget = coreMLLoadTarget
         self.mockTokens = mockTokens
@@ -247,6 +271,11 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
                 ).orThrowInvalid("\(argument) must be logits-layered-kv, stateful-kv, or stateful-step-kv")
             case "--diagnostics-top-k":
                 values.diagnosticsTopK = try parsePositiveInt(value(after: argument, in: arguments, at: &index), option: argument)
+            case "--diagnostics-prefix-lengths":
+                values.diagnosticsPrefixLengths = try parsePositiveIntList(
+                    value(after: argument, in: arguments, at: &index),
+                    option: argument
+                )
             case "--load-only":
                 values.loadOnly = true
             case "--coreml-load-target":
@@ -287,6 +316,8 @@ public struct RuntimeBenchmarkCommand: Sendable {
       --id ID
       --coreml-graph-interface logits-layered-kv|stateful-kv|stateful-step-kv
       --diagnostics-top-k N        Run Core ML logits diagnostics instead of generation.
+      --diagnostics-prefix-lengths 1,2,4
+                                   Run diagnostics on token prefixes.
       --load-only                  Load runtime artifacts and skip prompt generation.
       --coreml-load-target both|prefill|decode
     """
@@ -322,16 +353,17 @@ public struct RuntimeBenchmarkCommand: Sendable {
         }
 
         let prompts = try loadPrompts()
+        let tokenizer = try makeCoreMLTokenizer()
         let diagnostics = CoreMLPrefillDecodeDiagnostics(
             bundle: try makeCoreMLBundle(),
-            tokenizer: try makeCoreMLTokenizer()
+            tokenizer: tokenizer
         )
-        let results = prompts.map { prompt in
-            CoreMLDiagnosticPromptResult(
-                prompt: prompt,
-                result: Result {
-                    try diagnostics.run(prompt: prompt.input, topK: topK)
-                }
+        let results = try prompts.flatMap { prompt in
+            try diagnosticResults(
+                for: prompt,
+                diagnostics: diagnostics,
+                tokenizer: tokenizer,
+                topK: topK
             )
         }
         let report = CoreMLDiagnosticsReport(
@@ -425,6 +457,40 @@ public struct RuntimeBenchmarkCommand: Sendable {
         }
         return suite.prompts
     }
+
+    #if canImport(CoreML)
+    private func diagnosticResults(
+        for prompt: RuntimeBenchmarkPrompt,
+        diagnostics: CoreMLPrefillDecodeDiagnostics,
+        tokenizer: any TextTokenizer,
+        topK: Int
+    ) throws -> [CoreMLDiagnosticPromptResult] {
+        guard let prefixLengths = options.diagnosticsPrefixLengths else {
+            return [
+                CoreMLDiagnosticPromptResult(
+                    prompt: prompt,
+                    result: Result {
+                        try diagnostics.run(prompt: prompt.input, topK: topK)
+                    }
+                )
+            ]
+        }
+
+        let sourceTokenIDs = try tokenizer.encode(prompt.input)
+        return prefixLengths.map { requestedLength in
+            let prefixTokenIDs = Array(sourceTokenIDs.prefix(requestedLength))
+            return CoreMLDiagnosticPromptResult(
+                prompt: prompt,
+                requestedPrefixTokenCount: requestedLength,
+                prefixTokenCount: prefixTokenIDs.count,
+                sourcePromptTokenCount: sourceTokenIDs.count,
+                result: Result {
+                    try diagnostics.run(tokenIDs: prefixTokenIDs, topK: topK)
+                }
+            )
+        }
+    }
+    #endif
 
     private func makeRuntime() throws -> any InferenceRuntime {
         switch options.runtime {
@@ -616,6 +682,7 @@ private struct ParsedBenchmarkArguments {
     var tokenizerURL: URL?
     var coreMLGraphInterface: CoreMLBenchmarkGraphInterface = .explicitKV
     var diagnosticsTopK: Int?
+    var diagnosticsPrefixLengths: [Int]?
     var loadOnly = false
     var coreMLLoadTarget: CoreMLLoadTarget = .both
     var mockTokens = ["A"]
@@ -655,6 +722,7 @@ private struct ParsedBenchmarkArguments {
             tokenizerURL: tokenizerURL,
             coreMLGraphInterface: coreMLGraphInterface,
             diagnosticsTopK: diagnosticsTopK,
+            diagnosticsPrefixLengths: diagnosticsPrefixLengths,
             loadOnly: loadOnly,
             coreMLLoadTarget: coreMLLoadTarget,
             mockTokens: mockTokens,
@@ -681,6 +749,20 @@ private func parsePositiveInt(_ value: String, option: String) throws -> Int {
 
 private func parseStringList(_ value: String, option: String) throws -> [String] {
     let values = value.split(separator: ",").map(String.init).filter { !$0.isEmpty }
+    guard !values.isEmpty else {
+        throw RuntimeBenchmarkCommandError.invalidOption("\(option) must contain at least one value")
+    }
+    return values
+}
+
+private func parsePositiveIntList(_ value: String, option: String) throws -> [Int] {
+    let values = try value.split(separator: ",").map { token throws -> Int in
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let parsed = Int(trimmed), parsed > 0 else {
+            throw RuntimeBenchmarkCommandError.invalidOption("\(option) must contain comma-separated positive integers")
+        }
+        return parsed
+    }
     guard !values.isEmpty else {
         throw RuntimeBenchmarkCommandError.invalidOption("\(option) must contain at least one value")
     }

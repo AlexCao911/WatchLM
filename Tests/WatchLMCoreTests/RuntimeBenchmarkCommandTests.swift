@@ -178,3 +178,23 @@ import Testing
     #expect(options.coreMLGraphInterface == .statefulStepKV)
     #expect(options.promptIDs == ["en-short-001"])
 }
+
+@Test func runtimeBenchmarkCommandParsesCoreMLDiagnosticsPrefixLengths() throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let modelURL = root.appending(path: "Models/MiniCPM5/stateful-step-256.mlmodelc")
+    let tokenizerURL = root.appending(path: "Models/MiniCPM5/tokenizer.json")
+
+    let options = try RuntimeBenchmarkCommandOptions.parse(
+        [
+            "--runtime", "coreml",
+            "--prefill", modelURL.path,
+            "--tokenizer", tokenizerURL.path,
+            "--coreml-graph-interface", "stateful-step-kv",
+            "--diagnostics-top-k", "5",
+            "--diagnostics-prefix-lengths", "1,2,4"
+        ],
+        currentDirectory: root
+    )
+
+    #expect(options.diagnosticsPrefixLengths == [1, 2, 4])
+}
