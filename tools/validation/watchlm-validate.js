@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
 
+import { loadCalibrationPromptSuite } from "../benchmark/calibrationPrompts.js";
 import { loadBenchmarkPrompts } from "../benchmark/benchmarkPrompts.js";
 import { summarizeBenchmarkReport, validateBenchmarkReport } from "../benchmark/benchmarkReport.js";
 import { assertValidModelManifest, summarizeModelManifest } from "./modelManifest.js";
@@ -14,6 +15,9 @@ async function main(argv) {
       break;
     case "prompts":
       await validatePromptsCommand(args);
+      break;
+    case "calibration-prompts":
+      await validateCalibrationPromptsCommand(args);
       break;
     case "report":
       await validateReportCommand(args);
@@ -48,6 +52,18 @@ async function validatePromptsCommand(args) {
 
   const prompts = await loadBenchmarkPrompts(promptsPath);
   console.log(`prompts ok: ${prompts.length} prompts`);
+}
+
+async function validateCalibrationPromptsCommand(args) {
+  const [promptsPath] = args;
+  if (!promptsPath) {
+    throw new Error("calibration-prompts command requires a path");
+  }
+
+  const suite = await loadCalibrationPromptSuite(promptsPath);
+  console.log(
+    `calibration prompts ok: ${suite.prompts.length} prompts, prefixes=${suite.prefixTokenCounts.join(",")}`
+  );
 }
 
 async function validateReportCommand(args) {
@@ -102,6 +118,7 @@ function usage() {
     "Usage:",
     "  watchlm-validate manifest <path>",
     "  watchlm-validate prompts <path>",
+    "  watchlm-validate calibration-prompts <path>",
     "  watchlm-validate report <path>",
     "  watchlm-validate all --manifest <path> --prompts <path> --report <path>"
   ].join("\n");

@@ -23,6 +23,13 @@ const promptsPath = path.join(
   "fixtures",
   "benchmark-prompts.json"
 );
+const calibrationPromptsPath = path.join(
+  repoRoot,
+  "tools",
+  "benchmark",
+  "fixtures",
+  "calibration-prompts.json"
+);
 const reportPath = path.join(
   repoRoot,
   "tools",
@@ -50,6 +57,13 @@ test("validates benchmark prompt fixtures", () => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /prompts ok/);
+});
+
+test("validates calibration prompt fixtures", () => {
+  const result = runCli(["calibration-prompts", calibrationPromptsPath]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /calibration prompts ok: 12 prompts, prefixes=1,2,4,8,12,18,32/);
 });
 
 test("validates benchmark report fixtures", () => {
