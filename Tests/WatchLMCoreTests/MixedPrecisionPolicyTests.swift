@@ -32,6 +32,45 @@ import Testing
     #expect(policy.kvCacheDescriptorPrecision == .float16)
 }
 
+@Test func mixedPrecisionPolicyAppliesLayerOverridesBeforeEdgeProtection() throws {
+    var manifest = try loadSampleManifest()
+    manifest.quantization.weights.attentionV = "fp16"
+    manifest.quantization.layerOverrides = [
+        .attentionV: [5: "int4", 6: "int4"],
+        .ffn: [0: "int4", 12: "int8"]
+    ]
+
+    let policy = try MixedPrecisionPolicy(manifest: manifest)
+
+    #expect(policy.precision(for: .attentionV, layer: 5) == .int4)
+    #expect(policy.precision(for: .attentionV, layer: 6) == .int4)
+    #expect(policy.precision(for: .attentionV, layer: 7) == .fp16)
+    #expect(policy.precision(for: .ffn, layer: 12) == .int8)
+    #expect(policy.precision(for: .ffn, layer: 0) == .int8)
+    #expect(policy.precision(for: .ffn, layer: 23) == .int8)
+}
+
+@Test func mixedPrecisionPolicyConsumesRealImportanceGuidedPolicyFile() throws {
+    let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appending(path: "tools/conversion/mixed-precision-policy-stateful-step-importance-attention-v-low4-int4.json")
+    let quantization = try JSONDecoder().decode(QuantizationInfo.self, from: Data(contentsOf: url))
+
+    let policy = try MixedPrecisionPolicy(
+        quantization: quantization,
+        layerCount: 24,
+        protectedEdgeLayerCount: 0
+    )
+
+    #expect(policy.precision(for: .attentionV, layer: 5) == .int4)
+    #expect(policy.precision(for: .attentionV, layer: 6) == .int4)
+    #expect(policy.precision(for: .attentionV, layer: 7) == .int4)
+    #expect(policy.precision(for: .attentionV, layer: 8) == .int4)
+    #expect(policy.precision(for: .attentionV, layer: 9) == .fp16)
+    #expect(policy.precision(for: .attentionQKO, layer: 6) == .fp16)
+    #expect(policy.precision(for: .ffn, layer: 6) == .fp16)
+    #expect(policy.kvCache == .fp16)
+}
+
 @Test func mixedPrecisionPolicyRejectsUniformLowBitOrStructuralReduction() throws {
     var manifest = try loadSampleManifest()
     manifest.quantization.strategy = "uniform-int4"
@@ -60,6 +99,22 @@ import Testing
     manifest.quantization.kvCache = "int4"
 
     #expect(throws: MixedPrecisionPolicyError.unsupportedKVCachePrecision("int4")) {
+        _ = try MixedPrecisionPolicy(manifest: manifest)
+    }
+}
+
+@Test func mixedPrecisionPolicyRejectsInvalidLayerOverrides() throws {
+    var manifest = try loadSampleManifest()
+    manifest.quantization.layerOverrides = [.embedding: [0: "int4"]]
+
+    #expect(throws: MixedPrecisionPolicyError.unsupportedLayerOverrideComponent(.embedding)) {
+        _ = try MixedPrecisionPolicy(manifest: manifest)
+    }
+
+    manifest = try loadSampleManifest()
+    manifest.quantization.layerOverrides = [.attentionV: [24: "int4"]]
+
+    #expect(throws: MixedPrecisionPolicyError.invalidLayerOverride(.attentionV, 24)) {
         _ = try MixedPrecisionPolicy(manifest: manifest)
     }
 }

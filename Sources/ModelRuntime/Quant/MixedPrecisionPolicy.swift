@@ -29,6 +29,8 @@ public enum MixedPrecisionPolicyError: Error, Equatable, Sendable {
     case structuralReductionEnabled
     case invalidLayerCount(Int)
     case invalidProtectedLayerCount(Int)
+    case unsupportedLayerOverrideComponent(MixedPrecisionComponent)
+    case invalidLayerOverride(MixedPrecisionComponent, Int)
 }
 
 public struct MixedPrecisionPolicy: Codable, Equatable, Sendable {
@@ -41,6 +43,7 @@ public struct MixedPrecisionPolicy: Codable, Equatable, Sendable {
     public var attentionV: QuantizedPrecision
     public var ffn: QuantizedPrecision
     public var kvCache: QuantizedPrecision
+    public var layerOverrides: [MixedPrecisionComponent: [Int: QuantizedPrecision]]
 
     public init(
         manifest: ModelManifest,
@@ -88,6 +91,7 @@ public struct MixedPrecisionPolicy: Codable, Equatable, Sendable {
         attentionV = try Self.parsePrecision(quantization.weights.attentionV)
         ffn = try Self.parsePrecision(quantization.weights.ffn)
         self.kvCache = kvCache
+        layerOverrides = try Self.parseLayerOverrides(quantization.layerOverrides, layerCount: layerCount)
     }
 
     public func shouldProtectTransformerLayer(_ layer: Int) -> Bool {
@@ -118,11 +122,15 @@ public struct MixedPrecisionPolicy: Codable, Equatable, Sendable {
             basePrecision = ffn
         }
 
+        let resolvedPrecision = layer.flatMap { layer in
+            layerOverrides[component]?[layer]
+        } ?? basePrecision
+
         guard let layer, isTransformerComponent(component), shouldProtectTransformerLayer(layer) else {
-            return basePrecision
+            return resolvedPrecision
         }
 
-        return basePrecision.raisedToAtLeastInt8()
+        return resolvedPrecision.raisedToAtLeastInt8()
     }
 
     public var kvCacheDescriptorPrecision: KVCachePrecision {
@@ -139,6 +147,36 @@ public struct MixedPrecisionPolicy: Codable, Equatable, Sendable {
             throw MixedPrecisionPolicyError.unsupportedPrecision(rawValue)
         }
         return precision
+    }
+
+    private static func parseLayerOverrides(
+        _ rawOverrides: [MixedPrecisionComponent: [Int: String]]?,
+        layerCount: Int
+    ) throws -> [MixedPrecisionComponent: [Int: QuantizedPrecision]] {
+        guard let rawOverrides else {
+            return [:]
+        }
+
+        var parsed: [MixedPrecisionComponent: [Int: QuantizedPrecision]] = [:]
+        for (component, layerMap) in rawOverrides {
+            guard Self.supportsLayerOverrides(for: component) else {
+                throw MixedPrecisionPolicyError.unsupportedLayerOverrideComponent(component)
+            }
+            for layer in layerMap.keys where !(0..<layerCount).contains(layer) {
+                throw MixedPrecisionPolicyError.invalidLayerOverride(component, layer)
+            }
+            parsed[component] = try layerMap.mapValues(parsePrecision)
+        }
+        return parsed
+    }
+
+    private static func supportsLayerOverrides(for component: MixedPrecisionComponent) -> Bool {
+        switch component {
+        case .attentionQKO, .attentionV, .ffn:
+            true
+        case .embedding, .lmHead, .norms:
+            false
+        }
     }
 
     private func isTransformerComponent(_ component: MixedPrecisionComponent) -> Bool {

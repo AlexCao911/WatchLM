@@ -47,6 +47,16 @@ export const EXPECTED_ARCHITECTURE = Object.freeze({
   kvHeads: 2,
   tokenizerSource: EXPECTED_MODEL_ID
 });
+const SUPPORTED_PRECISIONS = Object.freeze(["fp16", "int8", "int4"]);
+const QUANTIZED_WEIGHT_COMPONENTS = Object.freeze([
+  "embedding",
+  "lmHead",
+  "norms",
+  "attentionQKO",
+  "attentionV",
+  "ffn"
+]);
+const TRANSFORMER_WEIGHT_COMPONENTS = Object.freeze(["attentionQKO", "attentionV", "ffn"]);
 
 export function validateModelManifest(manifest) {
   const errors = [];
@@ -393,9 +403,49 @@ function validateQuantization(manifest, errors) {
     return;
   }
 
-  for (const component of ["embedding", "lmHead", "norms", "attentionQKO", "ffn"]) {
+  for (const component of QUANTIZED_WEIGHT_COMPONENTS) {
     if (typeof quantization.weights[component] !== "string") {
       errors.push(`quantization.weights.${component} must be present`);
+    } else if (!SUPPORTED_PRECISIONS.includes(quantization.weights[component])) {
+      errors.push(`quantization.weights.${component} must be fp16, int8, or int4`);
+    }
+  }
+
+  validateLayerOverrides(quantization, manifest.architecture?.layers, errors);
+}
+
+function validateLayerOverrides(quantization, layerCount, errors) {
+  if (quantization.layerOverrides === undefined) {
+    return;
+  }
+  if (!isRecord(quantization.layerOverrides)) {
+    errors.push("quantization.layerOverrides must be an object");
+    return;
+  }
+
+  const resolvedLayerCount = Number.isInteger(layerCount) ? layerCount : EXPECTED_ARCHITECTURE.layers;
+  for (const [component, overrides] of Object.entries(quantization.layerOverrides)) {
+    if (!TRANSFORMER_WEIGHT_COMPONENTS.includes(component)) {
+      errors.push(`quantization.layerOverrides.${component} is not supported`);
+      continue;
+    }
+    if (!isRecord(overrides)) {
+      errors.push(`quantization.layerOverrides.${component} must be an object`);
+      continue;
+    }
+
+    for (const [rawLayer, precision] of Object.entries(overrides)) {
+      const layer = Number(rawLayer);
+      if (!Number.isInteger(layer)) {
+        errors.push(`quantization.layerOverrides.${component} layer must be an integer`);
+        continue;
+      }
+      if (layer < 0 || layer >= resolvedLayerCount) {
+        errors.push(`quantization.layerOverrides.${component}.${layer} is outside layer count`);
+      }
+      if (!SUPPORTED_PRECISIONS.includes(precision)) {
+        errors.push(`quantization.layerOverrides.${component}.${layer} must be fp16, int8, or int4`);
+      }
     }
   }
 }

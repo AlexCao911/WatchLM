@@ -267,6 +267,51 @@ test("quantization policy must be mixed precision with supported KV cache", () =
   assert.match(result.errors.join("\n"), /structuralReduction must be false/);
 });
 
+test("quantization weights must include value projection precision", () => {
+  const manifest = clone(validManifest);
+  delete manifest.quantization.weights.attentionV;
+
+  const result = validateModelManifest(manifest);
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /quantization\.weights\.attentionV must be present/);
+});
+
+test("quantization weight precision must be supported", () => {
+  const manifest = clone(validManifest);
+  manifest.quantization.weights.attentionV = "int2";
+
+  const result = validateModelManifest(manifest);
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /quantization\.weights\.attentionV must be fp16, int8, or int4/);
+});
+
+test("quantization layer overrides validate transformer components and layer precision", () => {
+  const manifest = clone(validManifest);
+  manifest.quantization.layerOverrides = {
+    attentionV: {
+      5: "int4",
+      99: "int4"
+    },
+    embedding: {
+      0: "int4"
+    },
+    ffn: {
+      12: "int2",
+      layerX: "int4"
+    }
+  };
+
+  const result = validateModelManifest(manifest);
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /quantization\.layerOverrides\.embedding is not supported/);
+  assert.match(result.errors.join("\n"), /quantization\.layerOverrides\.attentionV\.99 is outside layer count/);
+  assert.match(result.errors.join("\n"), /quantization\.layerOverrides\.ffn\.12 must be fp16, int8, or int4/);
+  assert.match(result.errors.join("\n"), /quantization\.layerOverrides\.ffn layer must be an integer/);
+});
+
 test("selectContextVariant clamps to the largest supported variant that fits", () => {
   assert.equal(selectContextVariant(validManifest, "watch-se-3", 1024), 1024);
   assert.equal(selectContextVariant(validManifest, "watch-se-3", 999), 512);

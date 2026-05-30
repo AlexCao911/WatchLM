@@ -379,8 +379,80 @@ public struct SelectedModelArtifact: Codable, Equatable, Sendable {
 public struct QuantizationInfo: Codable, Equatable, Sendable {
     public var strategy: String
     public var weights: QuantizationWeights
+    public var layerOverrides: [MixedPrecisionComponent: [Int: String]]?
     public var kvCache: String
     public var structuralReduction: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case strategy
+        case weights
+        case layerOverrides
+        case kvCache
+        case structuralReduction
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        strategy = try container.decode(String.self, forKey: .strategy)
+        weights = try container.decode(QuantizationWeights.self, forKey: .weights)
+        kvCache = try container.decode(String.self, forKey: .kvCache)
+        structuralReduction = try container.decode(Bool.self, forKey: .structuralReduction)
+        layerOverrides = try Self.decodeLayerOverrides(from: container)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(strategy, forKey: .strategy)
+        try container.encode(weights, forKey: .weights)
+        try container.encode(kvCache, forKey: .kvCache)
+        try container.encode(structuralReduction, forKey: .structuralReduction)
+
+        if let layerOverrides {
+            let encoded = Dictionary(uniqueKeysWithValues: layerOverrides.map { component, overrides in
+                (
+                    component.rawValue,
+                    Dictionary(uniqueKeysWithValues: overrides.map { layer, precision in
+                        (String(layer), precision)
+                    })
+                )
+            })
+            try container.encode(encoded, forKey: .layerOverrides)
+        }
+    }
+
+    private static func decodeLayerOverrides(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> [MixedPrecisionComponent: [Int: String]]? {
+        guard container.contains(.layerOverrides) else {
+            return nil
+        }
+
+        let rawOverrides = try container.decode([String: [String: String]].self, forKey: .layerOverrides)
+        var decoded: [MixedPrecisionComponent: [Int: String]] = [:]
+        for (rawComponent, rawLayerOverrides) in rawOverrides {
+            guard let component = MixedPrecisionComponent(rawValue: rawComponent) else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .layerOverrides,
+                    in: container,
+                    debugDescription: "Unsupported quantization layer override component: \(rawComponent)"
+                )
+            }
+
+            var layerOverrides: [Int: String] = [:]
+            for (rawLayer, precision) in rawLayerOverrides {
+                guard let layer = Int(rawLayer) else {
+                    throw DecodingError.dataCorruptedError(
+                        forKey: .layerOverrides,
+                        in: container,
+                        debugDescription: "Layer override key must be an integer: \(rawLayer)"
+                    )
+                }
+                layerOverrides[layer] = precision
+            }
+            decoded[component] = layerOverrides
+        }
+        return decoded
+    }
 }
 
 public struct QuantizationWeights: Codable, Equatable, Sendable {
