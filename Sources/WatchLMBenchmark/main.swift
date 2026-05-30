@@ -9,7 +9,20 @@ struct WatchLMBenchmarkMain {
             let options = try RuntimeBenchmarkCommandOptions.parse(Array(CommandLine.arguments.dropFirst()))
             let command = RuntimeBenchmarkCommand(options: options)
 
-            if options.diagnosticsTopK != nil {
+            if options.runsSensitivityComparison {
+                let report = try command.runSensitivityComparison()
+                if let outputURL = options.outputURL {
+                    print("wrote quantization sensitivity report: \(outputURL.path)")
+                    print(
+                        "gate_ok: \(report.gate.ok), " +
+                        "avg_prefill_topk_overlap: \(report.summary.averagePrefillTopKOverlapRatio)"
+                    )
+                } else {
+                    let data = try RuntimeBenchmarkCommand.encode(sensitivityReport: report)
+                    FileHandle.standardOutput.write(data)
+                    FileHandle.standardOutput.write(Data("\n".utf8))
+                }
+            } else if options.diagnosticsTopK != nil {
                 let report = try command.runDiagnostics()
                 if let outputURL = options.outputURL {
                     print("wrote Core ML diagnostics report: \(outputURL.path)")

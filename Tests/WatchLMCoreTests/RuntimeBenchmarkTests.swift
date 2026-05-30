@@ -448,6 +448,115 @@ private func sampleTeacherReferenceSuite() -> RuntimeBenchmarkQualityReferenceSu
     #expect(report.summary.averageTokenAgreement == 0.67)
 }
 
+@Test func quantizationSensitivityScorerFlagsEarlyPrefixCollapse() throws {
+    let baseline = [
+        LogitsDiagnosticPoint(
+            promptID: "en-short-001",
+            category: "en_short_instruction",
+            language: "en",
+            prefixTokenCount: 1,
+            prefillTopK: topK([5, 24, 49, 11127, 45050])
+        ),
+        LogitsDiagnosticPoint(
+            promptID: "en-short-001",
+            category: "en_short_instruction",
+            language: "en",
+            prefixTokenCount: 2,
+            prefillTopK: topK([285, 1070, 316, 3212, 976])
+        )
+    ]
+    let candidate = [
+        LogitsDiagnosticPoint(
+            promptID: "en-short-001",
+            category: "en_short_instruction",
+            language: "en",
+            prefixTokenCount: 1,
+            prefillTopK: topK([5, 24, 49, 11127, 45050])
+        ),
+        LogitsDiagnosticPoint(
+            promptID: "en-short-001",
+            category: "en_short_instruction",
+            language: "en",
+            prefixTokenCount: 2,
+            prefillTopK: topK([5, 24, 5298, 1207, 20773])
+        )
+    ]
+
+    let report = try QuantizationSensitivityScorer.compare(
+        baselinePolicyID: "stateful-step-kv-256-fp16",
+        candidatePolicyID: "stateful-step-layer8-15-v-layer11-12-qk-int4",
+        baseline: baseline,
+        candidate: candidate,
+        targets: QuantizationSensitivityTargets(
+            minimumAveragePrefillTopKOverlapRatio: 0.8,
+            criticalPrefixTokenCount: 4,
+            minimumCriticalPrefixOverlapCount: 1
+        )
+    )
+
+    #expect(report.summary.comparedPointCount == 2)
+    #expect(report.summary.averagePrefillTopKOverlapRatio == 0.5)
+    #expect(report.summary.prefillTop1Agreement == 0.5)
+    #expect(report.summary.firstZeroPrefillOverlapPrefixTokenCount == 2)
+    #expect(report.comparisons[1].prefillTopKOverlapCount == 0)
+    #expect(!report.gate.ok)
+    #expect(report.gate.failures.contains("average prefill top-k overlap 0.5 is below 0.8 target"))
+    #expect(report.gate.failures.contains("prefix 2 prefill overlap 0 is below 1 critical-prefix target"))
+}
+
+@Test func quantizationSensitivityScorerPassesStablePrefixDrift() throws {
+    let baseline = [
+        LogitsDiagnosticPoint(
+            promptID: "en-short-001",
+            category: "en_short_instruction",
+            language: "en",
+            prefixTokenCount: 12,
+            prefillTopK: topK([36734, 2319, 2242, 3229, 2218])
+        ),
+        LogitsDiagnosticPoint(
+            promptID: "en-short-001",
+            category: "en_short_instruction",
+            language: "en",
+            prefixTokenCount: 18,
+            prefillTopK: topK([1974, 591, 343, 416, 2452])
+        )
+    ]
+    let candidate = [
+        LogitsDiagnosticPoint(
+            promptID: "en-short-001",
+            category: "en_short_instruction",
+            language: "en",
+            prefixTokenCount: 12,
+            prefillTopK: topK([36734, 2319, 3229, 2242, 47708])
+        ),
+        LogitsDiagnosticPoint(
+            promptID: "en-short-001",
+            category: "en_short_instruction",
+            language: "en",
+            prefixTokenCount: 18,
+            prefillTopK: topK([1974, 591, 343, 416, 2452])
+        )
+    ]
+
+    let report = try QuantizationSensitivityScorer.compare(
+        baselinePolicyID: "stateful-step-kv-256-fp16",
+        candidatePolicyID: "stateful-step-layer8-15-v-int4",
+        baseline: baseline,
+        candidate: candidate,
+        targets: QuantizationSensitivityTargets(
+            minimumAveragePrefillTopKOverlapRatio: 0.8,
+            criticalPrefixTokenCount: 4,
+            minimumCriticalPrefixOverlapCount: 1
+        )
+    )
+
+    #expect(report.summary.averagePrefillTopKOverlapRatio == 0.9)
+    #expect(report.summary.prefillTop1Agreement == 1.0)
+    #expect(report.summary.firstZeroPrefillOverlapPrefixTokenCount == nil)
+    #expect(report.gate.ok)
+    #expect(report.gate.failures.isEmpty)
+}
+
 @Test func runtimeBenchmarkRunnerRecordsPromptFailuresAndContinues() async throws {
     let runtime = MockStreamingRuntime(tokens: [], failure: .modelAssetMissing)
     let prompts = [
@@ -478,6 +587,12 @@ private func sampleTeacherReferenceSuite() -> RuntimeBenchmarkQualityReferenceSu
     #expect(report.summary.succeededPromptCount == 0)
     #expect(report.summary.failedPromptCount == 1)
     #expect(!report.summary.allPromptsSucceeded)
+}
+
+private func topK(_ tokenIDs: [Int32]) -> [TokenLogit] {
+    tokenIDs.enumerated().map { index, tokenID in
+        TokenLogit(tokenID: tokenID, logit: Double(tokenIDs.count - index))
+    }
 }
 
 @Test func runtimeBenchmarkGatePassesSE3WhenLatencyQualityMemoryAndThermalMeetTargets() {

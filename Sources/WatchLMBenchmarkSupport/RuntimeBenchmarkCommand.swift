@@ -167,6 +167,8 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public var coreMLGraphInterface: CoreMLBenchmarkGraphInterface
     public var diagnosticsTopK: Int?
     public var diagnosticsPrefixLengths: [Int]?
+    public var sensitivityBaselineURL: URL?
+    public var sensitivityCandidateURL: URL?
     public var loadOnly: Bool
     public var coreMLLoadTarget: CoreMLLoadTarget
     public var mockTokens: [String]
@@ -192,6 +194,8 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         coreMLGraphInterface: CoreMLBenchmarkGraphInterface = .explicitKV,
         diagnosticsTopK: Int? = nil,
         diagnosticsPrefixLengths: [Int]? = nil,
+        sensitivityBaselineURL: URL? = nil,
+        sensitivityCandidateURL: URL? = nil,
         loadOnly: Bool = false,
         coreMLLoadTarget: CoreMLLoadTarget = .both,
         mockTokens: [String] = ["A"],
@@ -216,10 +220,16 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         self.coreMLGraphInterface = coreMLGraphInterface
         self.diagnosticsTopK = diagnosticsTopK
         self.diagnosticsPrefixLengths = diagnosticsPrefixLengths
+        self.sensitivityBaselineURL = sensitivityBaselineURL
+        self.sensitivityCandidateURL = sensitivityCandidateURL
         self.loadOnly = loadOnly
         self.coreMLLoadTarget = coreMLLoadTarget
         self.mockTokens = mockTokens
         self.mockTokenIDs = mockTokenIDs
+    }
+
+    public var runsSensitivityComparison: Bool {
+        sensitivityBaselineURL != nil || sensitivityCandidateURL != nil
     }
 
     public static func parse(
@@ -276,6 +286,10 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
                     value(after: argument, in: arguments, at: &index),
                     option: argument
                 )
+            case "--sensitivity-baseline":
+                values.sensitivityBaselineURL = values.resolve(try value(after: argument, in: arguments, at: &index))
+            case "--sensitivity-candidate":
+                values.sensitivityCandidateURL = values.resolve(try value(after: argument, in: arguments, at: &index))
             case "--load-only":
                 values.loadOnly = true
             case "--coreml-load-target":
@@ -301,6 +315,7 @@ public struct RuntimeBenchmarkCommand: Sendable {
     Usage:
       swift run WatchLMBenchmark --runtime coreml --prefill PATH --decode PATH --tokenizer PATH [options]
       swift run WatchLMBenchmark --runtime mock --mock-token-ids 10,11 --mock-tokens A,B [options]
+      swift run WatchLMBenchmark --sensitivity-baseline FP16.json --sensitivity-candidate CANDIDATE.json [options]
 
     Options:
       --prompts PATH                 Prompt suite JSON. Defaults to tools/benchmark/fixtures/benchmark-prompts.json.
@@ -318,6 +333,8 @@ public struct RuntimeBenchmarkCommand: Sendable {
       --diagnostics-top-k N        Run Core ML logits diagnostics instead of generation.
       --diagnostics-prefix-lengths 1,2,4
                                    Run diagnostics on token prefixes.
+      --sensitivity-baseline PATH  Baseline Core ML diagnostics JSON for quantization drift scoring.
+      --sensitivity-candidate PATH Candidate Core ML diagnostics JSON for quantization drift scoring.
       --load-only                  Load runtime artifacts and skip prompt generation.
       --coreml-load-target both|prefill|decode
     """
@@ -381,6 +398,31 @@ public struct RuntimeBenchmarkCommand: Sendable {
         #endif
     }
 
+    public func runSensitivityComparison() throws -> QuantizationSensitivityReport {
+        let baselineURL = try requiredURL(options.sensitivityBaselineURL, "--sensitivity-baseline")
+        let candidateURL = try requiredURL(options.sensitivityCandidateURL, "--sensitivity-candidate")
+        let decoder = JSONDecoder()
+        let baselineReport = try decoder.decode(
+            CoreMLDiagnosticsReport.self,
+            from: Data(contentsOf: baselineURL)
+        )
+        let candidateReport = try decoder.decode(
+            CoreMLDiagnosticsReport.self,
+            from: Data(contentsOf: candidateURL)
+        )
+        let report = try QuantizationSensitivityScorer.compare(
+            baselinePolicyID: Self.sensitivityPolicyID(from: baselineReport),
+            candidatePolicyID: Self.sensitivityPolicyID(from: candidateReport),
+            baseline: Self.diagnosticPoints(from: baselineReport),
+            candidate: Self.diagnosticPoints(from: candidateReport)
+        )
+
+        if let outputURL = options.outputURL {
+            try write(sensitivityReport: report, to: outputURL)
+        }
+        return report
+    }
+
     public static func encode(report: RuntimeBenchmarkReport) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -391,6 +433,32 @@ public struct RuntimeBenchmarkCommand: Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try encoder.encode(diagnosticsReport)
+    }
+
+    public static func encode(sensitivityReport: QuantizationSensitivityReport) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(sensitivityReport)
+    }
+
+    private static func diagnosticPoints(from report: CoreMLDiagnosticsReport) -> [LogitsDiagnosticPoint] {
+        report.promptResults.compactMap { result in
+            guard result.errorMessage == nil else {
+                return nil
+            }
+            return LogitsDiagnosticPoint(
+                promptID: result.promptID,
+                category: result.category,
+                language: result.language,
+                prefixTokenCount: result.prefixTokenCount,
+                prefillTopK: result.prefillTopK,
+                decodeTopK: result.decodeTopK
+            )
+        }
+    }
+
+    private static func sensitivityPolicyID(from report: CoreMLDiagnosticsReport) -> String {
+        report.configuration.artifact?.quantizationPolicyID ?? report.configuration.id
     }
 
     private func loadPrompts() throws -> [RuntimeBenchmarkPrompt] {
@@ -651,6 +719,14 @@ public struct RuntimeBenchmarkCommand: Sendable {
         try Self.encode(diagnosticsReport: diagnosticsReport).write(to: outputURL)
     }
 
+    private func write(sensitivityReport: QuantizationSensitivityReport, to outputURL: URL) throws {
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Self.encode(sensitivityReport: sensitivityReport).write(to: outputURL)
+    }
+
     private func displayPath(_ url: URL) -> String {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .standardizedFileURL
@@ -683,6 +759,8 @@ private struct ParsedBenchmarkArguments {
     var coreMLGraphInterface: CoreMLBenchmarkGraphInterface = .explicitKV
     var diagnosticsTopK: Int?
     var diagnosticsPrefixLengths: [Int]?
+    var sensitivityBaselineURL: URL?
+    var sensitivityCandidateURL: URL?
     var loadOnly = false
     var coreMLLoadTarget: CoreMLLoadTarget = .both
     var mockTokens = ["A"]
@@ -723,6 +801,8 @@ private struct ParsedBenchmarkArguments {
             coreMLGraphInterface: coreMLGraphInterface,
             diagnosticsTopK: diagnosticsTopK,
             diagnosticsPrefixLengths: diagnosticsPrefixLengths,
+            sensitivityBaselineURL: sensitivityBaselineURL,
+            sensitivityCandidateURL: sensitivityCandidateURL,
             loadOnly: loadOnly,
             coreMLLoadTarget: coreMLLoadTarget,
             mockTokens: mockTokens,

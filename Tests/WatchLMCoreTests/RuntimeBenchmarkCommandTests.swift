@@ -198,3 +198,130 @@ import Testing
 
     #expect(options.diagnosticsPrefixLengths == [1, 2, 4])
 }
+
+@Test func runtimeBenchmarkCommandParsesSensitivityComparisonInputs() throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    let baselineURL = temporaryDirectory.appending(path: "fp16-diagnostics.json")
+    let candidateURL = temporaryDirectory.appending(path: "candidate-diagnostics.json")
+    let outputURL = temporaryDirectory.appending(path: "sensitivity-report.json")
+
+    let options = try RuntimeBenchmarkCommandOptions.parse(
+        [
+            "--sensitivity-baseline", baselineURL.path,
+            "--sensitivity-candidate", candidateURL.path,
+            "--output", outputURL.path
+        ]
+    )
+
+    #expect(options.sensitivityBaselineURL == baselineURL)
+    #expect(options.sensitivityCandidateURL == candidateURL)
+    #expect(options.outputURL == outputURL)
+    #expect(options.runsSensitivityComparison)
+}
+
+@Test func runtimeBenchmarkCommandComparesDiagnosticsReports() throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    let baselineURL = temporaryDirectory.appending(path: "fp16-diagnostics.json")
+    let candidateURL = temporaryDirectory.appending(path: "candidate-diagnostics.json")
+    let outputURL = temporaryDirectory.appending(path: "sensitivity-report.json")
+
+    try writeDiagnosticsReport(
+        policyID: "stateful-step-kv-256-fp16",
+        promptResults: [
+            CoreMLDiagnosticPromptResult(
+                promptID: "en-short-001",
+                category: "en_short_instruction",
+                language: "en",
+                requestedPrefixTokenCount: 1,
+                prefixTokenCount: 1,
+                prefillTopK: commandTopK([5, 24, 49, 11127, 45050])
+            ),
+            CoreMLDiagnosticPromptResult(
+                promptID: "en-short-001",
+                category: "en_short_instruction",
+                language: "en",
+                requestedPrefixTokenCount: 2,
+                prefixTokenCount: 2,
+                prefillTopK: commandTopK([285, 1070, 316, 3212, 976])
+            )
+        ],
+        to: baselineURL
+    )
+    try writeDiagnosticsReport(
+        policyID: "stateful-step-layer8-15-v-layer11-12-qk-int4",
+        promptResults: [
+            CoreMLDiagnosticPromptResult(
+                promptID: "en-short-001",
+                category: "en_short_instruction",
+                language: "en",
+                requestedPrefixTokenCount: 1,
+                prefixTokenCount: 1,
+                prefillTopK: commandTopK([5, 24, 49, 11127, 45050])
+            ),
+            CoreMLDiagnosticPromptResult(
+                promptID: "en-short-001",
+                category: "en_short_instruction",
+                language: "en",
+                requestedPrefixTokenCount: 2,
+                prefixTokenCount: 2,
+                prefillTopK: commandTopK([5, 24, 5298, 1207, 20773])
+            )
+        ],
+        to: candidateURL
+    )
+
+    let report = try RuntimeBenchmarkCommand(
+        options: RuntimeBenchmarkCommandOptions(
+            promptsURL: temporaryDirectory.appending(path: "unused-prompts.json"),
+            outputURL: outputURL,
+            sensitivityBaselineURL: baselineURL,
+            sensitivityCandidateURL: candidateURL
+        )
+    ).runSensitivityComparison()
+
+    #expect(report.baselinePolicyID == "stateful-step-kv-256-fp16")
+    #expect(report.candidatePolicyID == "stateful-step-layer8-15-v-layer11-12-qk-int4")
+    #expect(report.summary.averagePrefillTopKOverlapRatio == 0.5)
+    #expect(report.summary.firstZeroPrefillOverlapPrefixTokenCount == 2)
+    #expect(!report.gate.ok)
+    #expect(FileManager.default.fileExists(atPath: outputURL.path))
+
+    let writtenReport = try JSONDecoder().decode(
+        QuantizationSensitivityReport.self,
+        from: Data(contentsOf: outputURL)
+    )
+    #expect(writtenReport == report)
+}
+
+private func writeDiagnosticsReport(
+    policyID: String,
+    promptResults: [CoreMLDiagnosticPromptResult],
+    to outputURL: URL
+) throws {
+    let report = CoreMLDiagnosticsReport(
+        configuration: RuntimeBenchmarkConfiguration(
+            id: "\(policyID)-diagnostics",
+            sourceModelId: "openbmb/MiniCPM5-1B",
+            runtime: "coreml-mlprogram",
+            deviceProfile: .watchSE2,
+            contextVariant: 256,
+            artifact: RuntimeBenchmarkArtifact(
+                quantizationPolicyID: policyID,
+                graphInterface: "stateful-step-kv",
+                prefillModelPath: "\(policyID).mlpackage",
+                decodeModelPath: "\(policyID).mlpackage"
+            )
+        ),
+        topK: 5,
+        promptResults: promptResults
+    )
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    try encoder.encode(report).write(to: outputURL)
+}
+
+private func commandTopK(_ tokenIDs: [Int32]) -> [TokenLogit] {
+    tokenIDs.enumerated().map { index, tokenID in
+        TokenLogit(tokenID: tokenID, logit: Double(tokenIDs.count - index))
+    }
+}
