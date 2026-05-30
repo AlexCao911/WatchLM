@@ -32,6 +32,12 @@ current route worth promoting toward Watch SE2/SE3.
 The quantization search should be guided by logits stability, not by blind
 artifact size trials.
 
+External priors are tracked separately:
+
+```text
+docs/architecture/2026-05-30-community-quantization-priors.md
+```
+
 Each candidate must pass increasingly stronger evidence gates:
 
 ```text
@@ -107,6 +113,14 @@ prefix:  diverges at prefix 2
 decision: do not widen directly from one stable attention layer to four layers
 ```
 
+Layer11-12 attention-only int4:
+
+```text
+quality: 0.0 token agreement on en-short-001
+prefix:  diverges at prefix 2
+decision: adding layer11 to stable layer12 is unsafe or causes accumulation
+```
+
 ## Current Intuition
 
 The current Core ML post-conversion kmeans palettization appears much riskier
@@ -135,9 +149,9 @@ Split if drift appears:
 The next candidates should widen only along the stable axis found so far:
 
 ```text
-layer 11-12 attention-only int4
 layer 12-13 attention-only int4
-layer 10, layer 11, and layer 13 single-layer attention-only int4 if needed
+layer 11 attention-only int4
+layer 13 attention-only int4
 Q/K/O-only vs V-only after the unstable side of the window is identified
 ```
 
