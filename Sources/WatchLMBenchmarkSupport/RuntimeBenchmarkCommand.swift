@@ -1,9 +1,19 @@
 import Foundation
 import WatchLMCore
 
+#if canImport(CoreML)
+import CoreML
+#endif
+
 public enum RuntimeBenchmarkRuntime: String, Codable, Equatable, Sendable {
     case mock
     case coreML = "coreml"
+}
+
+public enum CoreMLLoadTarget: String, Codable, Equatable, Sendable {
+    case both
+    case prefill
+    case decode
 }
 
 public enum RuntimeBenchmarkCommandError: Error, Equatable, CustomStringConvertible, Sendable {
@@ -40,6 +50,8 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public var prefillModelURL: URL?
     public var decodeModelURL: URL?
     public var tokenizerURL: URL?
+    public var loadOnly: Bool
+    public var coreMLLoadTarget: CoreMLLoadTarget
     public var mockTokens: [String]
     public var mockTokenIDs: [Int32]
 
@@ -60,6 +72,8 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         prefillModelURL: URL? = nil,
         decodeModelURL: URL? = nil,
         tokenizerURL: URL? = nil,
+        loadOnly: Bool = false,
+        coreMLLoadTarget: CoreMLLoadTarget = .both,
         mockTokens: [String] = ["A"],
         mockTokenIDs: [Int32] = [1]
     ) {
@@ -79,6 +93,8 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         self.prefillModelURL = prefillModelURL
         self.decodeModelURL = decodeModelURL
         self.tokenizerURL = tokenizerURL
+        self.loadOnly = loadOnly
+        self.coreMLLoadTarget = coreMLLoadTarget
         self.mockTokens = mockTokens
         self.mockTokenIDs = mockTokenIDs
     }
@@ -126,6 +142,11 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
                 values.decodeModelURL = values.resolve(try value(after: argument, in: arguments, at: &index))
             case "--tokenizer":
                 values.tokenizerURL = values.resolve(try value(after: argument, in: arguments, at: &index))
+            case "--load-only":
+                values.loadOnly = true
+            case "--coreml-load-target":
+                values.coreMLLoadTarget = try CoreMLLoadTarget(rawValue: value(after: argument, in: arguments, at: &index))
+                    .orThrowInvalid("\(argument) must be both, prefill, or decode")
             case "--mock-tokens":
                 values.mockTokens = try parseStringList(value(after: argument, in: arguments, at: &index), option: argument)
             case "--mock-token-ids":
@@ -159,6 +180,8 @@ public struct RuntimeBenchmarkCommand: Sendable {
       --context N
       --policy-id ID
       --id ID
+      --load-only                  Load runtime artifacts and skip prompt generation.
+      --coreml-load-target both|prefill|decode
     """
 
     private let options: RuntimeBenchmarkCommandOptions
@@ -168,7 +191,7 @@ public struct RuntimeBenchmarkCommand: Sendable {
     }
 
     public func run() async throws -> RuntimeBenchmarkReport {
-        let prompts = try loadPrompts()
+        let prompts = options.loadOnly ? [] : try loadPrompts()
         let runtime = try makeRuntime()
         let report = try await RuntimeBenchmarkRunner().run(
             runtime: runtime,
@@ -267,6 +290,10 @@ public struct RuntimeBenchmarkCommand: Sendable {
 
     private func makeCoreMLRuntime() throws -> any InferenceRuntime {
         #if canImport(CoreML)
+        if options.loadOnly {
+            return try makeCoreMLLoadProbeRuntime()
+        }
+
         let prefillURL = try requiredURL(options.prefillModelURL, "--prefill")
         let decodeURL = try requiredURL(options.decodeModelURL, "--decode")
         let tokenizerURL = try requiredURL(options.tokenizerURL, "--tokenizer")
@@ -283,6 +310,26 @@ public struct RuntimeBenchmarkCommand: Sendable {
         throw RuntimeBenchmarkCommandError.unsupportedRuntime("Core ML is unavailable on this platform")
         #endif
     }
+
+    #if canImport(CoreML)
+    private func makeCoreMLLoadProbeRuntime() throws -> any InferenceRuntime {
+        switch options.coreMLLoadTarget {
+        case .both:
+            return CoreMLLoadProbeRuntime(modelURLs: [
+                try requiredURL(options.prefillModelURL, "--prefill"),
+                try requiredURL(options.decodeModelURL, "--decode")
+            ])
+        case .prefill:
+            return CoreMLLoadProbeRuntime(modelURLs: [
+                try requiredURL(options.prefillModelURL, "--prefill")
+            ])
+        case .decode:
+            return CoreMLLoadProbeRuntime(modelURLs: [
+                try requiredURL(options.decodeModelURL, "--decode")
+            ])
+        }
+    }
+    #endif
 
     private func makeConfiguration() -> RuntimeBenchmarkConfiguration {
         RuntimeBenchmarkConfiguration(
@@ -362,6 +409,8 @@ private struct ParsedBenchmarkArguments {
     var prefillModelURL: URL?
     var decodeModelURL: URL?
     var tokenizerURL: URL?
+    var loadOnly = false
+    var coreMLLoadTarget: CoreMLLoadTarget = .both
     var mockTokens = ["A"]
     var mockTokenIDs: [Int32] = [1]
     private let currentDirectory: URL
@@ -397,6 +446,8 @@ private struct ParsedBenchmarkArguments {
             prefillModelURL: prefillModelURL,
             decodeModelURL: decodeModelURL,
             tokenizerURL: tokenizerURL,
+            loadOnly: loadOnly,
+            coreMLLoadTarget: coreMLLoadTarget,
             mockTokens: mockTokens,
             mockTokenIDs: mockTokenIDs
         )
@@ -468,6 +519,50 @@ private func byteCount(at url: URL) throws -> Int64 {
     }
     return Int64(values.fileSize ?? 0)
 }
+
+#if canImport(CoreML)
+private final class CoreMLLoadProbeRuntime: InferenceRuntime, @unchecked Sendable {
+    private let modelURLs: [URL]
+    private var loadedModels: [MLModel] = []
+
+    init(modelURLs: [URL]) {
+        self.modelURLs = modelURLs
+    }
+
+    func load() async throws -> RuntimeTiming {
+        let started = Date()
+        let configuration = MLModelConfiguration()
+        configuration.computeUnits = .all
+        loadedModels = try modelURLs.map { url in
+            try loadBenchmarkModel(at: url, configuration: configuration)
+        }
+        return RuntimeTiming(loadMs: elapsedMilliseconds(since: started))
+    }
+
+    func generate(
+        request: InferenceRequest,
+        shouldCancel: @Sendable () -> Bool
+    ) async throws -> InferenceResult {
+        throw InferenceRuntimeError.invalidInput(message: "Core ML load probe does not generate tokens.")
+    }
+}
+
+private func loadBenchmarkModel(at url: URL, configuration: MLModelConfiguration) throws -> MLModel {
+    #if os(macOS)
+    if url.pathExtension == "mlpackage" || url.pathExtension == "mlmodel" {
+        let compiledURL = try MLModel.compileModel(at: url)
+        return try MLModel(contentsOf: compiledURL, configuration: configuration)
+    }
+    #endif
+
+    return try MLModel(contentsOf: url, configuration: configuration)
+}
+
+private func elapsedMilliseconds(since started: Date) -> Double {
+    let elapsed = Date().timeIntervalSince(started) * 1000
+    return (elapsed * 1000).rounded() / 1000
+}
+#endif
 
 private extension Optional {
     func orThrowInvalid(_ message: String) throws -> Wrapped {

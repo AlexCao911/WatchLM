@@ -89,3 +89,27 @@ import Testing
     #expect(report.promptResults.map(\.promptID) == ["watch-utility-001", "zh-short-001"])
     #expect(report.summary.averageTokenAgreement == 1.0)
 }
+
+@Test func runtimeBenchmarkCommandCanRunLoadOnlyBenchmarkWithoutPrompts() async throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let promptsURL = root.appending(path: "tools/benchmark/fixtures/benchmark-prompts.json")
+    let temporaryDirectory = try makeTemporaryDirectory()
+    let outputURL = temporaryDirectory.appending(path: "load-only-report.json")
+
+    let options = try RuntimeBenchmarkCommandOptions.parse(
+        [
+            "--runtime", "mock",
+            "--prompts", promptsURL.path,
+            "--output", outputURL.path,
+            "--load-only",
+            "--coreml-load-target", "prefill"
+        ]
+    )
+    let report = try await RuntimeBenchmarkCommand(options: options).run()
+
+    #expect(options.loadOnly)
+    #expect(options.coreMLLoadTarget == .prefill)
+    #expect(report.promptResults.isEmpty)
+    #expect(report.summary.promptCount == 0)
+    #expect(FileManager.default.fileExists(atPath: outputURL.path))
+}
