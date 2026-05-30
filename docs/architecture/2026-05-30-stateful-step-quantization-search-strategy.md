@@ -121,6 +121,15 @@ prefix:  diverges at prefix 2
 decision: adding layer11 to stable layer12 is unsafe or causes accumulation
 ```
 
+Layer11 attention-only int4:
+
+```text
+quality: 1.0 token agreement on en-short-001
+prefix:  top-5 membership matches fp16 at every tested prefix
+decision: layer11 is not individually unsafe; layer11-12 failure points toward
+          adjacent-layer accumulation or Q/K/O/V interaction
+```
+
 ## Current Intuition
 
 The current Core ML post-conversion kmeans palettization appears much riskier
@@ -141,18 +150,23 @@ Expand first:
 
 Split if drift appears:
   Q/K/O-only vs V-only
-  narrower middle windows before wider windows
+  calibrated/groupwise candidates before wider windows
 ```
 
 ## Next Candidates
 
-The next candidates should widen only along the stable axis found so far:
+The layer11 result changes the next step. Both layer11 and layer12 attention
+are individually stable, but the adjacent layer11-12 window is not. More local
+layer sweeps would now be lower-signal unless they answer a sharper structural
+question.
+
+The next work should therefore pivot to evidence-led candidates:
 
 ```text
-layer 12-13 attention-only int4
-layer 11 attention-only int4
-layer 13 attention-only int4
-Q/K/O-only vs V-only after the unstable side of the window is identified
+calibration set + sensitivity scorer
+per-tensor / per-projection error metrics
+Q/K/O-only vs V-only only as a structurally motivated split
+groupwise or importance-aware int4 before retrying FFN or wider attention
 ```
 
 FFN-wide int4 should pause until we can test calibrated or groupwise

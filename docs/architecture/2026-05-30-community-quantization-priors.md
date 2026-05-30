@@ -120,6 +120,7 @@ Attention int4:
   layer12 attention-only: passes single-prompt teacher smoke
   layer10-13 attention window: fails
   layer11-12 attention window: fails
+  layer11 attention-only: passes single-prompt teacher smoke
 ```
 
 ## Updated Search Rules
@@ -133,7 +134,9 @@ Attention int4:
    until a calibrated/groupwise route exists.
 
 4. Treat single-layer attention success as a local clue, not a global recipe.
-   Neighboring attention layers and multi-layer accumulation must be tested.
+   Layer11 and layer12 both pass individually, while layer11-12 fails. This
+   points toward accumulation or projection interaction, not a simple
+   "safe layer" rule.
 
 5. Prefer community-proven quantization ideas before adding more local
    experiments:
@@ -148,17 +151,15 @@ separate treatment of KV cache
 
 ## Consequence For Next Work
 
-After layer11-12 failed, the most useful next experiments are:
+After layer11-12 failed and layer11 passed, the most useful next experiments
+should not be another blind widening pass. They should be architecture-led:
 
 ```text
-layer11 attention-only int4
-layer12-13 attention-only int4
-layer13 attention-only int4
+calibrated sensitivity scoring
+per-projection Q/K/O/V attribution
+groupwise or importance-aware int4
+KV cache precision as a separate runtime-state experiment
 ```
-
-If layer11 alone fails, the left side of layer12 should be treated as sensitive.
-If layer11 alone passes but layer11-12 fails, then multi-layer accumulation is
-the more likely cause and Q/K/O-only vs V-only becomes the next axis.
 
 Parallel to this, WatchLM should plan a calibrated quantization path rather than
 relying only on Core ML post-conversion palettization:
