@@ -66,6 +66,29 @@ import CoreML
     #expect(result.metrics.totalKVAppendMovedScalarCount == 0)
 }
 
+@Test func coreMLPrefillDecodeDiagnosticsExposePrefillAndDecodeTopK() throws {
+    let prefillURL = try #require(smokeModelURL(named: "SmokeLayeredPrefill"))
+    let decodeURL = try #require(smokeModelURL(named: "SmokeLayeredDecode"))
+    let bundle = CoreMLPrefillDecodeBundle(
+        prefillModelURL: prefillURL,
+        decodeModelURL: decodeURL,
+        maxPromptTokens: 4,
+        graphInterface: .logitsAndLayeredKV(layerCount: 1, kvHeads: 1, headDimension: 1),
+        decodeTokenInputName: "token_id"
+    )
+
+    let report = try CoreMLPrefillDecodeDiagnostics(
+        bundle: bundle,
+        tokenizer: FixtureTokenIDTokenizer()
+    ).run(prompt: "A B", topK: 3)
+
+    #expect(report.prefillTokenID == 5)
+    #expect(report.firstDecodeTokenID == 6)
+    #expect(report.prefillTopK.count == 3)
+    #expect(report.decodeTopK.count == 3)
+    #expect(report.promptTokenIDs == [2, 3])
+}
+
 #if os(macOS)
 @Test func coreMLPrefillDecodeRuntimeCanRunLocalRealMiniCPMInt8Artifacts() async throws {
     guard ProcessInfo.processInfo.environment["WATCHLM_RUN_REAL_COREML_TESTS"] == "1" else {
@@ -138,6 +161,40 @@ import CoreML
     #expect(result.metrics.kvAppendStepMs.count == 1)
     #expect(result.metrics.kvAppendWriteIndices.count == 1)
     #expect(result.metrics.kvCacheUpdateStrategy == .slotRing)
+}
+
+@Test func coreMLPrefillDecodeDiagnosticsCanRunLocalRealMiniCPMInt8Artifacts() throws {
+    guard ProcessInfo.processInfo.environment["WATCHLM_RUN_REAL_COREML_TESTS"] == "1" else {
+        return
+    }
+
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let prefillURL = root.appending(path: "artifacts/coreml/real-minicpm5-prefill-kv-16-int8/prefill-kv-16-int8.mlpackage")
+    let decodeURL = root.appending(path: "artifacts/coreml/real-minicpm5-decode-16-int8/decode-16-int8.mlpackage")
+    let tokenizerURL = root.appending(path: "artifacts/hf/MiniCPM5-1B/tokenizer.json")
+    guard FileManager.default.fileExists(atPath: prefillURL.path),
+          FileManager.default.fileExists(atPath: decodeURL.path),
+          FileManager.default.fileExists(atPath: tokenizerURL.path)
+    else {
+        return
+    }
+
+    let bundle = CoreMLPrefillDecodeBundle.miniCPMExplicitKV(
+        prefillModelURL: prefillURL,
+        decodeModelURL: decodeURL,
+        maxPromptTokens: 16
+    )
+    let report = try CoreMLPrefillDecodeDiagnostics(
+        bundle: bundle,
+        tokenizer: try MiniCPMBytePairTokenizer(tokenizerJSONURL: tokenizerURL, addBosToken: true)
+    ).run(
+        prompt: "Explain in one short paragraph why a split prefill/decode graph helps watch inference.",
+        topK: 5
+    )
+
+    #expect(report.prefillTopK.count == 5)
+    #expect(report.decodeTopK.count == 5)
+    print("WATCHLM_REAL_INT8_DIAGNOSTIC en-short-001 prefill=\(report.prefillTopK.map(\.tokenID)) decode=\(report.decodeTopK.map(\.tokenID))")
 }
 
 @Test func coreMLPrefillDecodeRuntimeCanRunLocalRealMiniCPMFFN1013MixedArtifacts() async throws {
