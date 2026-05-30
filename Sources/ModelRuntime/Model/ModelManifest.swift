@@ -226,6 +226,16 @@ public struct RuntimeInfo: Codable, Equatable, Sendable {
     public var kvCacheMode: String
     public var graphSchema: RuntimeGraphSchema
 
+    public func kvCacheRouteDecision(
+        capabilities: CoreMLRuntimeCapabilities
+    ) -> CoreMLKVCacheRouteDecision {
+        CoreMLKVCacheRoutePlanner.selectRoute(
+            kvCacheMode: kvCacheMode,
+            graphInterface: graphSchema.interface,
+            capabilities: capabilities
+        )
+    }
+
     public var kvCacheUpdateStrategy: KVCacheUpdateStrategy {
         switch kvCacheMode {
         case "contiguous-sliding":

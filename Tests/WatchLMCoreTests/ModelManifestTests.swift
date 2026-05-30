@@ -133,6 +133,8 @@ import Testing
     #expect(assembly.bundle.maxPromptTokens == 256)
     #expect(assembly.bundle.prefillInputName == "input_ids")
     #expect(assembly.bundle.decodeTokenInputName == "token_id")
+    #expect(assembly.kvCacheRouteDecision.selectedRoute == .explicitSlotRing)
+    #expect(assembly.kvCacheRouteDecision.reason.contains("explicit KV tensors"))
     #expect(assembly.bundle.kvCacheUpdateStrategy == .slotRing)
     #expect(assembly.bundle.samplingStrategy == .seeded(seed: 999))
     #expect(try assembly.tokenizer.encode("Hi") == [0, 19301])
@@ -169,6 +171,7 @@ import Testing
     )
 
     #expect(assembly.bundle.kvCacheUpdateStrategy == .contiguousSliding)
+    #expect(assembly.kvCacheRouteDecision.selectedRoute == .explicitContiguousSliding)
 }
 #endif
 

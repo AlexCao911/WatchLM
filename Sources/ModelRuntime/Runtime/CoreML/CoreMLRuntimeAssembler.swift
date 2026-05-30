@@ -10,6 +10,7 @@ public enum CoreMLRuntimeAssemblyError: Error, Equatable, Sendable {
 public struct CoreMLRuntimeAssembly: Sendable {
     public var artifact: SelectedModelArtifact
     public var verificationReport: ModelArtifactVerificationReport
+    public var kvCacheRouteDecision: CoreMLKVCacheRouteDecision
     public var bundle: CoreMLPrefillDecodeBundle
     public var tokenizer: MiniCPMBytePairTokenizer
     public var tokenizerURL: URL
@@ -41,6 +42,7 @@ public struct CoreMLRuntimeAssembler: Sendable {
         assetBaseURL: URL,
         logitsProcessor: LogitsProcessor = LogitsProcessor(),
         samplingStrategy: TokenSamplingStrategy = .greedy,
+        runtimeCapabilities: CoreMLRuntimeCapabilities = .current,
         verifyArtifacts: Bool = true
     ) throws -> CoreMLRuntimeAssembly {
         let validationErrors = manifest.validationErrors
@@ -71,6 +73,9 @@ public struct CoreMLRuntimeAssembler: Sendable {
             tokenizerJSONURL: tokenizerURL,
             addBosToken: true
         )
+        let kvCacheRouteDecision = manifest.runtime.kvCacheRouteDecision(
+            capabilities: runtimeCapabilities
+        )
         let bundle = try CoreMLPrefillDecodeBundle(
             prefillModelURL: prefillModelURL,
             decodeModelURL: decodeModelURL,
@@ -78,12 +83,14 @@ public struct CoreMLRuntimeAssembler: Sendable {
             graphSchema: manifest.runtime.graphSchema,
             logitsProcessor: logitsProcessor,
             samplingStrategy: samplingStrategy,
-            kvCacheUpdateStrategy: manifest.runtime.kvCacheUpdateStrategy
+            kvCacheUpdateStrategy: kvCacheRouteDecision.selectedRoute.explicitUpdateStrategy
+                ?? manifest.runtime.kvCacheUpdateStrategy
         )
 
         return CoreMLRuntimeAssembly(
             artifact: artifact,
             verificationReport: verificationReport,
+            kvCacheRouteDecision: kvCacheRouteDecision,
             bundle: bundle,
             tokenizer: tokenizer,
             tokenizerURL: tokenizerURL
