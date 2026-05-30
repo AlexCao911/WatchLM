@@ -79,6 +79,28 @@
         "top1Matches": true
       }
     },
+    "kvPrefillProtectedGraphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-prefill-protected/prefill-kv-16-mixed.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16-prefill-protected/prefill-kv-16-mixed.mlmodelc",
+      "prefillKVBytes": 1241841784,
+      "quantizationPolicyId": "prefill-kv-fp16-attn-ffn12-int4",
+      "selectorAudit": {
+        "int8SelectedOps": 71,
+        "int8SelectedComponents": ["embedding", "ffn", "lmHead"],
+        "int4SelectedOps": 3,
+        "int4SelectedComponent": "ffn",
+        "int4SelectedLayers": "12",
+        "attentionPrecision": "fp16",
+        "kvCachePrecision": "fp16"
+      },
+      "swiftDiagnostic": {
+        "promptId": "en-short-001",
+        "protectedPrefillToFP16DecodeTopK": [4245, 826, 11420, 5018, 2793],
+        "protectedPrefillToInt8DecodeTopK": [4245, 826, 11420, 5018, 2793],
+        "top1MatchesTeacher": true
+      },
+      "summary": "Protecting prefill attention and KV cache policy at fp16 while compressing embedding, lm_head, and FFN restores the context-16 Swift decode top-1 when paired with either fp16 or int8 decode."
+    },
     "kvMixedGraphs": {
       "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-mixed/prefill-kv-16-mixed.mlpackage",
       "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16-mixed/decode-16-mixed.mlpackage",

@@ -126,6 +126,7 @@ Current context-16 evidence:
 - `prefill-kv-16-int8` and `decode-16-int8` compile for watchOS and preserve the teacher top-1.
 - `prefill-kv-16-mixed` and `decode-16-mixed` shrink to about 830MB each, but the current middle-FFN int4 policy does not preserve top-1.
 - `prefill-kv-16-mixed-ffn12` and `decode-16-mixed-ffn12` compile for watchOS and preserve teacher top-1; they only shrink each graph to about 1.072GB, so the next search should widen the int4 layer override window gradually.
+- `prefill-kv-16-prefill-protected` compiles for watchOS and restores Swift decode top-1 when paired with either fp16 or int8 decode on `en-short-001`. It is 1,241,841,784 bytes, so it is a quality-preserving direction rather than a deployable SE2/SE3 size point.
 - `prefill-kv-16-mixed-ffn10-13` and `decode-16-mixed-ffn10-13` compile for watchOS and preserve teacher top-1 on the local prompt. They shrink each graph to about 1.040GB, with higher drift than FFN12: prefill top10 agreement 9/10, decode top10 agreement 9/10, decode KV max error 0.96533203125.
 - `prefill-kv-16-mixed-ffn8-15` and `decode-16-mixed-ffn8-15` compile for watchOS and preserve teacher top-1 on the local prompt. They shrink each graph to about 998MB, but quality drift rises again: prefill top10 agreement 9/10, decode top10 agreement 8/10, decode KV max error 1.501708984375. Treat this as a boundary point, not the default.
 
