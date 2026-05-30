@@ -424,6 +424,95 @@ test("prefill KV protected no-int4 policy emits only the int8 compression pass",
   assert.ok(!plan.compressionPasses[0].opNamePatterns.includes("self_attn.v_proj"));
 });
 
+test("stateful step protected no-int4 policy keeps attention and KV state at fp16", async () => {
+  const { stdout } = await execFileAsync(python, [
+    conversionScript,
+    "--compression",
+    "mixed",
+    "--precision-policy",
+    "tools/conversion/mixed-precision-policy-stateful-step-protected-no-int4.json",
+    "--describe-compression-policy"
+  ], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const plan = JSON.parse(stdout);
+
+  assert.equal(plan.policyId, "stateful-step-fp16-attn-ffn-int8");
+  assert.equal(plan.kvCachePrecision, "fp16");
+  assert.equal(plan.componentPrecision.attentionQKO, "fp16");
+  assert.equal(plan.componentPrecision.attentionV, "fp16");
+  assert.equal(plan.componentPrecision.ffn, "int8");
+  assert.equal(plan.layerPrecision["0"].ffn, "int8");
+  assert.equal(plan.layerPrecision["12"].ffn, "int8");
+  assert.deepEqual(plan.compressionPasses.map((pass) => pass.precision), ["int8"]);
+  assert.ok(plan.compressionPasses[0].opNamePatterns.includes("lm_head"));
+  assert.ok(plan.compressionPasses[0].opNamePatterns.includes("mlp.down_proj"));
+  assert.ok(!plan.compressionPasses[0].opNamePatterns.includes("self_attn.q_proj"));
+  assert.ok(!plan.compressionPasses[0].opNamePatterns.includes("self_attn.v_proj"));
+});
+
+test("stateful step FFN-only int8 policy keeps embedding and lm head at fp16", async () => {
+  const { stdout } = await execFileAsync(python, [
+    conversionScript,
+    "--compression",
+    "mixed",
+    "--precision-policy",
+    "tools/conversion/mixed-precision-policy-stateful-step-ffn-int8.json",
+    "--describe-compression-policy"
+  ], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const plan = JSON.parse(stdout);
+
+  assert.equal(plan.policyId, "stateful-step-fp16-embed-lmhead-attn-ffn-int8");
+  assert.equal(plan.componentPrecision.embedding, "fp16");
+  assert.equal(plan.componentPrecision.lmHead, "fp16");
+  assert.equal(plan.componentPrecision.attentionQKO, "fp16");
+  assert.equal(plan.componentPrecision.attentionV, "fp16");
+  assert.equal(plan.componentPrecision.ffn, "int8");
+  assert.deepEqual(plan.compressionPasses.map((pass) => pass.precision), ["int8"]);
+  assert.deepEqual(plan.compressionPasses[0].opNamePatterns, [
+    "feed_forward",
+    "ffn",
+    "mlp.down_proj",
+    "mlp.gate_proj",
+    "mlp.up_proj"
+  ]);
+});
+
+test("stateful step single-layer FFN int8 policy leaves most FFN layers at fp16", async () => {
+  const { stdout } = await execFileAsync(python, [
+    conversionScript,
+    "--compression",
+    "mixed",
+    "--precision-policy",
+    "tools/conversion/mixed-precision-policy-stateful-step-ffn12-int8.json",
+    "--describe-compression-policy"
+  ], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const plan = JSON.parse(stdout);
+
+  assert.equal(plan.policyId, "stateful-step-ffn12-int8-rest-fp16");
+  assert.equal(plan.componentPrecision.embedding, "fp16");
+  assert.equal(plan.componentPrecision.lmHead, "fp16");
+  assert.equal(plan.componentPrecision.ffn, "fp16");
+  assert.equal(plan.layerPrecision["11"].ffn, "fp16");
+  assert.equal(plan.layerPrecision["12"].ffn, "int8");
+  assert.equal(plan.layerPrecision["13"].ffn, "fp16");
+  assert.deepEqual(plan.compressionPasses.map((pass) => pass.precision), ["int8"]);
+  assert.deepEqual(plan.compressionPasses[0].opNamePatterns, [
+    "feed_forward",
+    "ffn",
+    "mlp.down_proj",
+    "mlp.gate_proj",
+    "mlp.up_proj"
+  ]);
+});
+
 test("real MiniCPM conversion CLI can reject source package compression without a compression mode", async () => {
   await assert.rejects(
     execFileAsync(python, [

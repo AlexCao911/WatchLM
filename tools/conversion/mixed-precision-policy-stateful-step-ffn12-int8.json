@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "policyId": "stateful-step-ffn12-int8-rest-fp16",
+  "strategy": "mixed-precision-fidelity-first",
+  "layerCount": 24,
+  "protectedEdgeLayerCount": 2,
+  "weights": {
+    "embedding": "fp16",
+    "lmHead": "fp16",
+    "norms": "fp16",
+    "attentionQKO": "fp16",
+    "attentionV": "fp16",
+    "ffn": "fp16"
+  },
+  "layerOverrides": {
+    "ffn": {
+      "12": "int8"
+    }
+  },
+  "kvCache": "fp16",
+  "structuralReduction": false,
+  "opNamePatterns": {
+    "embedding": [
+      "embed_tokens",
+      "tok_embeddings",
+      "embedding"
+    ],
+    "lmHead": [
+      "lm_head",
+      "output_projection"
+    ],
+    "norms": [
+      "input_layernorm",
+      "post_attention_layernorm",
+      "norm"
+    ],
+    "attentionQKO": [
+      "self_attn.q_proj",
+      "self_attn.k_proj",
+      "self_attn.o_proj",
+      "attention.wq",
+      "attention.wk",
+      "attention.wo"
+    ],
+    "attentionV": [
+      "self_attn.v_proj",
+      "attention.wv"
+    ],
+    "ffn": [
+      "mlp.gate_proj",
+      "mlp.up_proj",
+      "mlp.down_proj",
+      "feed_forward",
+      "ffn"
+    ]
+  }
+}
