@@ -124,6 +124,52 @@ class MiniCPMDecodeKVWrapper(torch.nn.Module):
         return tuple(values)
 
 
+class MiniCPMStatefulKVWrapper(torch.nn.Module):
+    def __init__(self, model: torch.nn.Module, context_tokens: int) -> None:
+        super().__init__()
+        self.model = model
+        self.context_tokens = context_tokens
+        layer_count = int(model.config.num_hidden_layers)
+        kv_heads = config_kv_heads(model.config)
+        head_dimension = config_head_dimension(model.config)
+        state_shape = (1, kv_heads, context_tokens, head_dimension)
+        for index in range(layer_count):
+            self.register_buffer(f"past_key_{index}", torch.zeros(state_shape, dtype=torch.float16))
+            self.register_buffer(f"past_value_{index}", torch.zeros(state_shape, dtype=torch.float16))
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        position_ids: torch.Tensor,
+        causal_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        query_length = input_ids.shape[-1]
+        end_step = causal_mask.shape[-1]
+        past_kv_length = end_step - query_length
+        pairs = []
+        for index in range(int(self.model.config.num_hidden_layers)):
+            key = getattr(self, f"past_key_{index}")
+            value = getattr(self, f"past_value_{index}")
+            pairs.append((key[:, :, :past_kv_length, :], value[:, :, :past_kv_length, :]))
+
+        cache = DynamicCache(pairs, config=self.model.config)
+        output = self.model(
+            input_ids=input_ids.to(torch.long),
+            attention_mask=causal_mask,
+            position_ids=position_ids.to(torch.long),
+            past_key_values=cache,
+            use_cache=True,
+        )
+
+        for index, layer in enumerate(output.past_key_values.layers):
+            key = getattr(self, f"past_key_{index}")
+            value = getattr(self, f"past_value_{index}")
+            key[:, :, past_kv_length:end_step, :] = layer.keys[:, :, past_kv_length:end_step, :]
+            value[:, :, past_kv_length:end_step, :] = layer.values[:, :, past_kv_length:end_step, :]
+
+        return output.logits[:, -1, :]
+
+
 def main() -> None:
     args = parse_args()
     mixed_policy = load_mixed_precision_policy(args.precision_policy) if args.compression == "mixed" else None
@@ -156,6 +202,8 @@ def main() -> None:
             snapshot_path = run_stage(report, "download_snapshot", lambda: download_snapshot(args))
             tokenizer = run_stage(report, "load_tokenizer", lambda: load_tokenizer(snapshot_path))
             model = run_stage(report, "load_model", lambda: load_model(snapshot_path))
+            if args.graph == "stateful-kv":
+                report["graphSchema"] = stateful_kv_graph_schema(model.config, args.context_tokens)
             example_inputs = run_stage(
                 report,
                 "build_example_inputs",
@@ -165,7 +213,7 @@ def main() -> None:
             mlpackage_path = run_stage(
                 report,
                 f"convert_{args.graph}_coreml",
-                lambda: convert_graph(traced, example_inputs, output_dir, model.config.num_hidden_layers, args),
+                lambda: convert_graph(traced, example_inputs, output_dir, model.config, args),
             )
 
         if args.compression != "none":
@@ -203,7 +251,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Convert real MiniCPM5 Core ML graphs.")
     parser.add_argument("--model-id", default=DEFAULT_MODEL_ID)
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
-    parser.add_argument("--graph", choices=["prefill", "prefill-kv", "decode"], default="prefill")
+    parser.add_argument("--graph", choices=["prefill", "prefill-kv", "decode", "stateful-kv"], default="prefill")
     parser.add_argument("--context-tokens", type=int, default=16)
     parser.add_argument("--prompt", default=DEFAULT_PROMPT)
     parser.add_argument("--output-dir", default="artifacts/coreml/real-minicpm5-prefill-16")
@@ -316,7 +364,7 @@ def build_example_inputs(
         args.context_tokens,
         args.prompt,
     )
-    if args.graph in {"prefill", "prefill-kv"}:
+    if args.graph in {"prefill", "prefill-kv", "stateful-kv"}:
         return input_ids, position_ids, causal_mask
     return build_decode_inputs(model, input_ids, token_mask, position_ids, causal_mask)
 
@@ -407,6 +455,8 @@ def trace_graph(
         wrapper: torch.nn.Module = MiniCPMPrefillWrapper(model)
     elif args.graph == "prefill-kv":
         wrapper = MiniCPMPrefillKVWrapper(model)
+    elif args.graph == "stateful-kv":
+        wrapper = MiniCPMStatefulKVWrapper(model, args.context_tokens)
     else:
         wrapper = MiniCPMDecodeKVWrapper(model, model.config.num_hidden_layers)
     wrapper.eval()
@@ -419,7 +469,7 @@ def convert_graph(
     traced: torch.jit.ScriptModule,
     example_inputs: tuple[torch.Tensor, ...],
     output_dir: Path,
-    num_hidden_layers: int,
+    config: Any,
     args: argparse.Namespace,
 ) -> Path:
     package_path = output_dir / f"{args.graph}-{args.context_tokens}.mlpackage"
@@ -427,13 +477,15 @@ def convert_graph(
         shutil.rmtree(package_path)
 
     precision = ct.precision.FLOAT16 if args.compute_precision == "float16" else ct.precision.FLOAT32
+    minimum_deployment_target = ct.target.iOS18 if args.graph == "stateful-kv" else ct.target.watchOS10
     mlmodel = ct.convert(
         traced,
         convert_to="mlprogram",
-        minimum_deployment_target=ct.target.watchOS10,
+        minimum_deployment_target=minimum_deployment_target,
         compute_precision=precision,
-        inputs=input_types(args.graph, example_inputs, num_hidden_layers),
-        outputs=output_types(args.graph, num_hidden_layers),
+        inputs=input_types(args.graph, example_inputs, config, args.context_tokens),
+        outputs=output_types(args.graph, int(config.num_hidden_layers)),
+        states=state_types(args.graph, config, args.context_tokens),
     )
     mlmodel.save(package_path)
     return package_path
@@ -442,8 +494,27 @@ def convert_graph(
 def input_types(
     graph: str,
     example_inputs: tuple[torch.Tensor, ...],
-    num_hidden_layers: int,
+    config: Any,
+    context_tokens: int,
 ) -> list[ct.TensorType]:
+    if graph == "stateful-kv":
+        input_ids, position_ids, causal_mask = example_inputs
+        query_length = ct.RangeDim(
+            lower_bound=1,
+            upper_bound=context_tokens,
+            default=int(input_ids.shape[-1]),
+        )
+        key_length = ct.RangeDim(
+            lower_bound=1,
+            upper_bound=context_tokens + 1,
+            default=int(causal_mask.shape[-1]),
+        )
+        return [
+            ct.TensorType(name="input_ids", shape=(1, query_length), dtype=np.int32),
+            ct.TensorType(name="position_ids", shape=(1, query_length), dtype=np.int32),
+            ct.TensorType(name="causal_mask", shape=(1, 1, query_length, key_length), dtype=np.float16),
+        ]
+
     if graph in {"prefill", "prefill-kv"}:
         input_ids, position_ids, causal_mask = example_inputs
         return [
@@ -458,6 +529,7 @@ def input_types(
         ct.TensorType(name="position_id", shape=tuple(position_id.shape), dtype=np.int32),
         ct.TensorType(name="causal_mask", shape=tuple(causal_mask.shape), dtype=np.float16),
     ]
+    num_hidden_layers = int(config.num_hidden_layers)
     for index in range(num_hidden_layers):
         key = past_key_values[index * 2]
         value = past_key_values[index * 2 + 1]
@@ -467,7 +539,7 @@ def input_types(
 
 
 def output_types(graph: str, num_hidden_layers: int) -> list[ct.TensorType]:
-    if graph == "prefill":
+    if graph in {"prefill", "stateful-kv"}:
         return [ct.TensorType(name="logits")]
 
     outputs = [ct.TensorType(name="logits")]
@@ -476,6 +548,58 @@ def output_types(graph: str, num_hidden_layers: int) -> list[ct.TensorType]:
         outputs.append(ct.TensorType(name=f"{prefix}_key_{index}"))
         outputs.append(ct.TensorType(name=f"{prefix}_value_{index}"))
     return outputs
+
+
+def state_types(graph: str, config: Any, context_tokens: int) -> list[ct.StateType] | None:
+    if graph != "stateful-kv":
+        return None
+
+    return [
+        ct.StateType(
+            wrapped_type=ct.TensorType(
+                shape=tuple(spec["shape"]),
+                dtype=np.float16,
+            ),
+            name=spec["name"],
+        )
+        for spec in stateful_kv_state_specs(config, context_tokens)
+    ]
+
+
+def stateful_kv_graph_schema(config: Any, context_tokens: int) -> dict[str, Any]:
+    return {
+        "interface": "stateful-kv",
+        "layerCount": int(config.num_hidden_layers),
+        "kvHeads": config_kv_heads(config),
+        "headDimension": config_head_dimension(config),
+        "contextTokens": int(context_tokens),
+        "inputs": ["input_ids", "position_ids", "causal_mask"],
+        "outputs": ["logits"],
+        "states": stateful_kv_state_specs(config, context_tokens),
+    }
+
+
+def stateful_kv_state_specs(config: Any, context_tokens: int) -> list[dict[str, Any]]:
+    layer_count = int(config.num_hidden_layers)
+    shape = [1, config_kv_heads(config), int(context_tokens), config_head_dimension(config)]
+    states: list[dict[str, Any]] = []
+    for layer in range(layer_count):
+        states.append({"name": f"past_key_{layer}", "shape": shape, "dtype": "float16"})
+        states.append({"name": f"past_value_{layer}", "shape": shape, "dtype": "float16"})
+    return states
+
+
+def config_kv_heads(config: Any) -> int:
+    kv_heads = getattr(config, "num_key_value_heads", None)
+    if kv_heads is None:
+        kv_heads = getattr(config, "num_attention_heads")
+    return int(kv_heads)
+
+
+def config_head_dimension(config: Any) -> int:
+    if hasattr(config, "head_dim"):
+        return int(config.head_dim)
+    return int(config.hidden_size) // int(config.num_attention_heads)
 
 
 def resolve_repo_path(path: str | Path) -> Path:
