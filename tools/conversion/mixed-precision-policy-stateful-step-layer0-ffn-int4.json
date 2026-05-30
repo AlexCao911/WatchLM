@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "policyId": "stateful-step-layer0-ffn-int4-rest-fp16",
+  "strategy": "mixed-precision-fidelity-first",
+  "layerCount": 24,
+  "protectedEdgeLayerCount": 0,
+  "weights": {
+    "embedding": "fp16",
+    "lmHead": "fp16",
+    "norms": "fp16",
+    "attentionQKO": "fp16",
+    "attentionV": "fp16",
+    "ffn": "fp16"
+  },
+  "layerOverrides": {
+    "ffn": {
+      "0": "int4"
+    }
+  },
+  "kvCache": "fp16",
+  "structuralReduction": false
+}
