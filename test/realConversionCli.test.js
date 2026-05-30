@@ -368,6 +368,78 @@ print(json.dumps({"plan": plan, "audit": audit}, sort_keys=True))
   assert.deepEqual(result.audit.passes.int4.selectedByLayer, { "12": 1 });
 });
 
+test("mixed precision policies can describe grouped-channel int4 palettization", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "watchlm-policy-"));
+  const policyPath = path.join(tempDir, "grouped-channel-policy.json");
+  await writeFile(policyPath, JSON.stringify({
+    schemaVersion: 1,
+    policyId: "stateful-step-attention-int4-grouped-channel",
+    strategy: "mixed-precision-fidelity-first",
+    layerCount: 24,
+    protectedEdgeLayerCount: 0,
+    weights: {
+      embedding: "fp16",
+      lmHead: "fp16",
+      norms: "fp16",
+      attentionQKO: "fp16",
+      attentionV: "fp16",
+      ffn: "fp16"
+    },
+    layerOverrides: {
+      attentionQKO: {
+        "11": "int4"
+      },
+      attentionV: {
+        "11": "int4"
+      }
+    },
+    int4Compression: {
+      method: "palettization",
+      mode: "kmeans",
+      granularity: "per_grouped_channel",
+      groupSize: 16,
+      enablePerChannelScale: true,
+      clusterDim: 1,
+      numKMeansWorkers: 1,
+      weightThreshold: 2048
+    },
+    kvCache: "fp16",
+    structuralReduction: false
+  }), "utf8");
+
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+policy = module.load_mixed_precision_policy(${JSON.stringify(policyPath)})
+plan = module.build_mixed_compression_plan(policy)
+print(json.dumps(plan["compressionPasses"], sort_keys=True))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const passes = JSON.parse(stdout);
+  const int4Pass = passes.find((pass) => pass.precision === "int4");
+
+  assert.equal(int4Pass.method, "kmeans_palettization");
+  assert.deepEqual(int4Pass.settings, {
+    clusterDim: 1,
+    enablePerChannelScale: true,
+    granularity: "per_grouped_channel",
+    groupSize: 16,
+    method: "palettization",
+    mode: "kmeans",
+    numKMeansWorkers: 1,
+    weightThreshold: 2048
+  });
+});
+
 test("prefill KV protected policy keeps attention and KV cache at fp16", async () => {
   const { stdout } = await execFileAsync(python, [
     conversionScript,
@@ -994,6 +1066,70 @@ print(json.dumps({"plan": plan, "audit": audit}, sort_keys=True))
     "11": 4,
     "12": 4
   });
+});
+
+test("stateful step layer11-12 grouped-channel attention int4 policy narrows compression error", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+policy = module.load_mixed_precision_policy(
+    "tools/conversion/mixed-precision-policy-stateful-step-layer11-12-attention-int4-grouped-channel.json"
+)
+plan = module.build_mixed_compression_plan(policy)
+print(json.dumps(plan, sort_keys=True))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const plan = JSON.parse(stdout);
+  const int4Pass = plan.compressionPasses.find((pass) => pass.precision === "int4");
+
+  assert.equal(plan.policyId, "stateful-step-layer11-12-attention-int4-grouped-channel-rest-fp16");
+  assert.equal(plan.layerPrecision["11"].attentionQKO, "int4");
+  assert.equal(plan.layerPrecision["12"].attentionV, "int4");
+  assert.equal(plan.layerPrecision["10"].attentionQKO, "fp16");
+  assert.equal(plan.layerPrecision["13"].attentionV, "fp16");
+  assert.equal(int4Pass.settings.granularity, "per_grouped_channel");
+  assert.equal(int4Pass.settings.groupSize, 16);
+  assert.equal(int4Pass.settings.enablePerChannelScale, true);
+});
+
+test("stateful step layer11-12 grouped-channel no-scale policy isolates compiler-compatible grouped LUT", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+policy = module.load_mixed_precision_policy(
+    "tools/conversion/mixed-precision-policy-stateful-step-layer11-12-attention-int4-grouped-channel-noscale.json"
+)
+plan = module.build_mixed_compression_plan(policy)
+print(json.dumps(plan, sort_keys=True))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const plan = JSON.parse(stdout);
+  const int4Pass = plan.compressionPasses.find((pass) => pass.precision === "int4");
+
+  assert.equal(plan.policyId, "stateful-step-layer11-12-attention-int4-grouped-channel-noscale-rest-fp16");
+  assert.equal(plan.layerPrecision["11"].attentionQKO, "int4");
+  assert.equal(plan.layerPrecision["12"].attentionV, "int4");
+  assert.equal(int4Pass.settings.granularity, "per_grouped_channel");
+  assert.equal(int4Pass.settings.groupSize, 16);
+  assert.equal(int4Pass.settings.enablePerChannelScale, false);
 });
 
 test("stateful step layer11 attention-only int4 policy tests the left neighbor of layer12", async () => {

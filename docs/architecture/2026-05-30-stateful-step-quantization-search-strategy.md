@@ -130,6 +130,15 @@ decision: layer11 is not individually unsafe; layer11-12 failure points toward
           adjacent-layer accumulation or Q/K/O/V interaction
 ```
 
+Layer11-12 grouped-channel attention-only int4:
+
+```text
+per-channel scale: blocked by local Core ML compiler verification
+no-scale quality:  0.0 token agreement on en-short-001
+prefix:            diverges at prefix 2
+decision:          grouped LUT alone does not fix the adjacent-layer failure
+```
+
 ## Current Intuition
 
 The current Core ML post-conversion kmeans palettization appears much riskier
@@ -165,7 +174,7 @@ The next work should therefore pivot to evidence-led candidates:
 ```text
 calibration set + sensitivity scorer
 per-tensor / per-projection error metrics
-Q/K/O-only vs V-only only as a structurally motivated split
+Q/K/O-only vs V-only as the immediate structurally motivated split
 groupwise or importance-aware int4 before retrying FFN or wider attention
 ```
 

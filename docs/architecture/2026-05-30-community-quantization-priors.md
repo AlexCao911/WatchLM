@@ -121,6 +121,7 @@ Attention int4:
   layer10-13 attention window: fails
   layer11-12 attention window: fails
   layer11 attention-only: passes single-prompt teacher smoke
+  layer11-12 grouped-channel no-scale: fails
 ```
 
 ## Updated Search Rules
@@ -146,6 +147,7 @@ importance/calibration data
 mixed precision by tensor class
 higher precision for output/embedding/norms
 separate treatment of attention and FFN
+projection-level attribution inside attention
 separate treatment of KV cache
 ```
 
@@ -160,6 +162,11 @@ per-projection Q/K/O/V attribution
 groupwise or importance-aware int4
 KV cache precision as a separate runtime-state experiment
 ```
+
+The grouped-channel Core ML retry has now been tested. It compiles when
+`enablePerChannelScale` is disabled, but it still fails at prefix 2 for the
+layer11-12 attention window. The immediate next step is therefore projection
+attribution, not another layer-window expansion.
 
 Parallel to this, WatchLM should plan a calibrated quantization path rather than
 relying only on Core ML post-conversion palettization:

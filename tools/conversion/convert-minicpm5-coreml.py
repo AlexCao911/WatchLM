@@ -25,9 +25,22 @@ DEFAULT_CACHE_DIR = ROOT / "artifacts" / "hf" / "MiniCPM5-1B"
 DEFAULT_PROMPT = "Apple Watch local inference test."
 DEFAULT_PRECISION_POLICY = ROOT / "tools" / "conversion" / "mixed-precision-policy.json"
 SUPPORTED_MIXED_PRECISIONS = {"fp16", "int8", "int4"}
+SUPPORTED_INT4_COMPRESSION_METHODS = {"palettization"}
+SUPPORTED_INT4_PALETTIZATION_MODES = {"kmeans", "uniform"}
+SUPPORTED_INT4_PALETTIZATION_GRANULARITIES = {"per_tensor", "per_grouped_channel"}
 MIXED_POLICY_COMPONENTS = ("embedding", "lmHead", "norms", "attentionQKO", "attentionV", "ffn")
 TRANSFORMER_COMPONENTS = ("attentionQKO", "attentionV", "ffn")
 STATEFUL_GRAPHS = {"stateful-kv", "stateful-step-kv"}
+DEFAULT_INT4_COMPRESSION = {
+    "method": "palettization",
+    "mode": "kmeans",
+    "granularity": "per_tensor",
+    "groupSize": 32,
+    "enablePerChannelScale": False,
+    "clusterDim": 1,
+    "numKMeansWorkers": 1,
+    "weightThreshold": 2048,
+}
 DEFAULT_OP_NAME_PATTERNS: dict[str, list[str]] = {
     "embedding": ["embed_tokens", "tok_embeddings", "embedding"],
     "lmHead": ["lm_head", "output_projection"],
@@ -751,6 +764,7 @@ def load_mixed_precision_policy(policy_path: str | Path) -> dict[str, Any]:
         op_name_patterns[component] = patterns
 
     layer_overrides = parse_layer_overrides(policy.get("layerOverrides") or {}, layer_count)
+    int4_compression = parse_int4_compression(policy.get("int4Compression"))
 
     return {
         "schemaVersion": policy.get("schemaVersion", 1),
@@ -763,6 +777,7 @@ def load_mixed_precision_policy(policy_path: str | Path) -> dict[str, Any]:
         "structuralReduction": structural_reduction,
         "opNamePatterns": op_name_patterns,
         "layerOverrides": layer_overrides,
+        "int4Compression": int4_compression,
     }
 
 
@@ -796,6 +811,58 @@ def parse_layer_overrides(raw_overrides: Any, layer_count: int) -> dict[str, dic
     return overrides
 
 
+def parse_int4_compression(raw_compression: Any) -> dict[str, Any]:
+    if raw_compression is None:
+        return dict(DEFAULT_INT4_COMPRESSION)
+    if not isinstance(raw_compression, dict):
+        raise ValueError("mixed precision policy int4Compression must be an object")
+
+    compression = dict(DEFAULT_INT4_COMPRESSION)
+    compression.update(raw_compression)
+
+    method = compression.get("method")
+    if method not in SUPPORTED_INT4_COMPRESSION_METHODS:
+        raise ValueError("mixed precision policy int4Compression.method must be palettization")
+
+    mode = compression.get("mode")
+    if mode not in SUPPORTED_INT4_PALETTIZATION_MODES:
+        raise ValueError("mixed precision policy int4Compression.mode must be kmeans or uniform")
+
+    granularity = compression.get("granularity")
+    if granularity not in SUPPORTED_INT4_PALETTIZATION_GRANULARITIES:
+        raise ValueError(
+            "mixed precision policy int4Compression.granularity must be per_tensor or per_grouped_channel"
+        )
+
+    group_size = int(compression.get("groupSize"))
+    if group_size <= 0:
+        raise ValueError("mixed precision policy int4Compression.groupSize must be positive")
+    compression["groupSize"] = group_size
+
+    cluster_dim = int(compression.get("clusterDim"))
+    if cluster_dim <= 0:
+        raise ValueError("mixed precision policy int4Compression.clusterDim must be positive")
+    compression["clusterDim"] = cluster_dim
+
+    num_kmeans_workers = int(compression.get("numKMeansWorkers"))
+    if num_kmeans_workers <= 0:
+        raise ValueError("mixed precision policy int4Compression.numKMeansWorkers must be positive")
+    compression["numKMeansWorkers"] = num_kmeans_workers
+
+    weight_threshold = compression.get("weightThreshold")
+    if weight_threshold is not None:
+        weight_threshold = int(weight_threshold)
+        if weight_threshold < 0:
+            raise ValueError("mixed precision policy int4Compression.weightThreshold must be non-negative")
+    compression["weightThreshold"] = weight_threshold
+
+    enable_per_channel_scale = compression.get("enablePerChannelScale")
+    if not isinstance(enable_per_channel_scale, bool):
+        raise ValueError("mixed precision policy int4Compression.enablePerChannelScale must be boolean")
+
+    return compression
+
+
 def build_mixed_compression_plan(policy: dict[str, Any]) -> dict[str, Any]:
     layer_precision = {
         str(layer): {
@@ -814,6 +881,7 @@ def build_mixed_compression_plan(policy: dict[str, Any]) -> dict[str, Any]:
             "precision": "int4",
             "method": "kmeans_palettization",
             "opNamePatterns": op_patterns_for_precision(policy, "int4", layer_precision),
+            "settings": policy["int4Compression"],
         },
     ]
     compression_passes = [pass_ for pass_ in compression_passes if pass_["opNamePatterns"]]
@@ -928,6 +996,7 @@ def compress_coreml_package(
     mixed_policy: dict[str, Any] | None = None,
 ) -> tuple[Path, dict[str, Any] | None]:
     from coremltools.optimize.coreml import (
+        get_weights_metadata,
         OpLinearQuantizerConfig,
         OpPalettizerConfig,
         OptimizationConfig,
@@ -952,23 +1021,65 @@ def compress_coreml_package(
         if mixed_policy is None:
             raise ValueError("mixed compression requires a precision policy")
         compression_audit = new_mixed_compression_audit(mixed_policy)
-        compressed = ct.compression_utils.affine_quantize_weights(
+        int8_op_configs = mixed_precision_op_name_configs(
             model,
-            mode="linear_symmetric",
-            dtype=np.int8,
-            op_selector=make_mixed_precision_op_selector(mixed_policy, "int8", compression_audit),
+            get_weights_metadata,
+            mixed_policy,
+            "int8",
+            OpLinearQuantizerConfig(mode="linear_symmetric"),
+            compression_audit,
         )
-        compressed = ct.compression_utils.palettize_weights(
+        if int8_op_configs:
+            compressed = linear_quantize_weights(model, config=OptimizationConfig(op_name_configs=int8_op_configs))
+        else:
+            compressed = model
+        int4_settings = mixed_policy["int4Compression"]
+        int4_op_configs = mixed_precision_op_name_configs(
             compressed,
-            mode="kmeans",
-            nbits=4,
-            op_selector=make_mixed_precision_op_selector(mixed_policy, "int4", compression_audit),
+            get_weights_metadata,
+            mixed_policy,
+            "int4",
+            OpPalettizerConfig(
+                mode=int4_settings["mode"],
+                nbits=4,
+                granularity=int4_settings["granularity"],
+                group_size=int4_settings["groupSize"],
+                enable_per_channel_scale=int4_settings["enablePerChannelScale"],
+                cluster_dim=int4_settings["clusterDim"],
+                num_kmeans_workers=int4_settings["numKMeansWorkers"],
+                weight_threshold=int4_settings["weightThreshold"],
+            ),
+            compression_audit,
         )
+        if int4_op_configs:
+            compressed = palettize_weights(compressed, config=OptimizationConfig(op_name_configs=int4_op_configs))
     else:
         raise ValueError(f"Unsupported compression: {compression}")
 
     compressed.save(str(compressed_path))
     return compressed_path, compression_audit
+
+
+def mixed_precision_op_name_configs(
+    model: Any,
+    get_weights_metadata: Any,
+    policy: dict[str, Any],
+    target_precision: str,
+    config: Any,
+    audit: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    metadata = get_weights_metadata(model, weight_threshold=0)
+    op_name_configs: dict[str, Any | None] = {}
+    for name in sorted(metadata.keys()):
+        component = classify_component_from_op_name(name, policy["opNamePatterns"])
+        layer = extract_layer_index(name)
+        selected = (
+            component is not None
+            and precision_for_component(policy, component, layer) == target_precision
+        )
+        record_mixed_compression_audit(audit, target_precision, name, component, layer, selected)
+        op_name_configs[name] = config if selected else None
+    return op_name_configs
 
 
 def make_mixed_precision_op_selector(
