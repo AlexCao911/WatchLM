@@ -99,6 +99,14 @@ prefix:  high top-5 overlap with fp16
 decision: middle-layer attention is the first useful int4 expansion direction
 ```
 
+Layer10-13 attention-only int4:
+
+```text
+quality: 0.0 token agreement on en-short-001
+prefix:  diverges at prefix 2
+decision: do not widen directly from one stable attention layer to four layers
+```
+
 ## Current Intuition
 
 The current Core ML post-conversion kmeans palettization appears much riskier
@@ -127,10 +135,10 @@ Split if drift appears:
 The next candidates should widen only along the stable axis found so far:
 
 ```text
-layer 10-13 attention-only int4
-layer 8-15 attention-only int4
-layer 12 Q/K/O-only int4
-layer 12 V-only int4
+layer 11-12 attention-only int4
+layer 12-13 attention-only int4
+layer 10, layer 11, and layer 13 single-layer attention-only int4 if needed
+Q/K/O-only vs V-only after the unstable side of the window is identified
 ```
 
 FFN-wide int4 should pause until we can test calibrated or groupwise
