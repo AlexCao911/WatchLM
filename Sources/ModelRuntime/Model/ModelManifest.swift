@@ -62,6 +62,8 @@ public struct ModelManifest: Codable, Equatable, Sendable {
             errors.append("asset.storage must not be app-bundle")
         }
 
+        validateStatefulSharedArtifacts(into: &errors)
+
         if let variants = asset.variants {
             for profile in DeviceProfile.allCases {
                 guard let defaultContextVariant = deviceProfiles[profile.rawValue]?.defaultContextVariant else {
@@ -168,6 +170,20 @@ public struct ModelManifest: Codable, Equatable, Sendable {
 
         if graphSchema.decode.newValuePrefix != ModelManifestContract.decodeNewValuePrefix {
             errors.append("runtime.graphSchema.decode.newValuePrefix must be \(ModelManifestContract.decodeNewValuePrefix)")
+        }
+    }
+
+    private func validateStatefulSharedArtifacts(into errors: inout [String]) {
+        guard ModelManifestContract.statefulGraphInterfaces.contains(runtime.graphSchema.interface) else {
+            return
+        }
+
+        if asset.prefillPath != asset.decodePath {
+            errors.append("stateful Core ML graphs must use the same artifact path for prefill and decode")
+        }
+
+        for (contextVariant, variant) in asset.variants ?? [:] where variant.prefillPath != variant.decodePath {
+            errors.append("asset.variants.\(contextVariant) must use the same artifact path for prefill and decode for stateful Core ML graphs")
         }
     }
 
@@ -389,6 +405,10 @@ enum ModelManifestContract {
     static let statefulStepKVGraphInterface = "stateful-step-kv"
     static let supportedGraphInterfaces = [
         explicitKVGraphInterface,
+        statefulKVGraphInterface,
+        statefulStepKVGraphInterface
+    ]
+    static let statefulGraphInterfaces = [
         statefulKVGraphInterface,
         statefulStepKVGraphInterface
     ]

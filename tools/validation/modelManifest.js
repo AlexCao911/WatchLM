@@ -10,6 +10,10 @@ export const SUPPORTED_GRAPH_INTERFACES = Object.freeze([
   "stateful-kv",
   "stateful-step-kv"
 ]);
+export const STATEFUL_GRAPH_INTERFACES = Object.freeze([
+  "stateful-kv",
+  "stateful-step-kv"
+]);
 export const EXPECTED_MODEL_ID = "openbmb/MiniCPM5-1B";
 export const EXPECTED_RUNTIME = "coreml-mlprogram";
 export const EXPECTED_GRAPH_SCHEMA = Object.freeze({
@@ -297,7 +301,29 @@ function validateAsset(manifest, errors) {
     }
   }
 
+  validateStatefulSharedArtifacts(manifest, errors);
   validateAssetVariants(manifest, errors);
+}
+
+function validateStatefulSharedArtifacts(manifest, errors) {
+  if (!STATEFUL_GRAPH_INTERFACES.includes(manifest.runtime?.graphSchema?.interface)) {
+    return;
+  }
+
+  if (manifest.asset?.prefillPath !== manifest.asset?.decodePath) {
+    errors.push("stateful Core ML graphs must use the same artifact path for prefill and decode");
+  }
+
+  const variants = manifest.asset?.variants;
+  if (!isRecord(variants)) {
+    return;
+  }
+
+  for (const [contextVariant, variant] of Object.entries(variants)) {
+    if (variant.prefillPath !== variant.decodePath) {
+      errors.push(`asset.variants.${contextVariant} must use the same artifact path for prefill and decode for stateful Core ML graphs`);
+    }
+  }
 }
 
 function validateAssetVariants(manifest, errors) {

@@ -74,6 +74,12 @@ import Testing
 @Test func manifestRuntimeGraphSchemaAcceptsStatefulKVInterface() throws {
     var manifest = try loadSampleManifest()
     manifest.runtime.graphSchema.interface = "stateful-kv"
+    manifest.asset.prefillPath = "Models/MiniCPM5/stateful-512.mlpackage"
+    manifest.asset.decodePath = "Models/MiniCPM5/stateful-512.mlpackage"
+    manifest.asset.variants?["256"]?.prefillPath = "Models/MiniCPM5/stateful-256.mlpackage"
+    manifest.asset.variants?["256"]?.decodePath = "Models/MiniCPM5/stateful-256.mlpackage"
+    manifest.asset.variants?["512"]?.prefillPath = "Models/MiniCPM5/stateful-512.mlpackage"
+    manifest.asset.variants?["512"]?.decodePath = "Models/MiniCPM5/stateful-512.mlpackage"
 
     let watchOS11 = CoreMLRuntimeCapabilities(
         platform: .watchOS,
@@ -89,6 +95,12 @@ import Testing
     manifest.runtime.graphSchema.interface = "stateful-step-kv"
     manifest.runtime.graphSchema.decode.tokenID = "input_ids"
     manifest.runtime.graphSchema.decode.positionID = "position_ids"
+    manifest.asset.prefillPath = "Models/MiniCPM5/stateful-step-512.mlpackage"
+    manifest.asset.decodePath = "Models/MiniCPM5/stateful-step-512.mlpackage"
+    manifest.asset.variants?["256"]?.prefillPath = "Models/MiniCPM5/stateful-step-256.mlpackage"
+    manifest.asset.variants?["256"]?.decodePath = "Models/MiniCPM5/stateful-step-256.mlpackage"
+    manifest.asset.variants?["512"]?.prefillPath = "Models/MiniCPM5/stateful-step-512.mlpackage"
+    manifest.asset.variants?["512"]?.decodePath = "Models/MiniCPM5/stateful-step-512.mlpackage"
 
     let watchOS11 = CoreMLRuntimeCapabilities(
         platform: .watchOS,
@@ -97,6 +109,17 @@ import Testing
 
     #expect(manifest.validationErrors.isEmpty)
     #expect(manifest.runtime.kvCacheRouteDecision(capabilities: watchOS11).selectedRoute == .statefulKV)
+}
+
+@Test func statefulGraphManifestRequiresSharedModelArtifacts() throws {
+    var manifest = try loadSampleManifest()
+    manifest.runtime.graphSchema.interface = "stateful-step-kv"
+    manifest.runtime.graphSchema.decode.tokenID = "input_ids"
+    manifest.runtime.graphSchema.decode.positionID = "position_ids"
+
+    #expect(manifest.validationErrors.contains("stateful Core ML graphs must use the same artifact path for prefill and decode"))
+    #expect(manifest.validationErrors.contains("asset.variants.256 must use the same artifact path for prefill and decode for stateful Core ML graphs"))
+    #expect(manifest.validationErrors.contains("asset.variants.512 must use the same artifact path for prefill and decode for stateful Core ML graphs"))
 }
 
 #if canImport(CoreML)
@@ -235,8 +258,12 @@ import Testing
 
     var manifest = try loadSampleManifest()
     manifest.runtime.graphSchema.interface = "stateful-kv"
+    manifest.asset.prefillPath = "Models/MiniCPM5/stateful-256.mlpackage"
+    manifest.asset.decodePath = "Models/MiniCPM5/stateful-256.mlpackage"
     manifest.asset.variants?["256"]?.prefillPath = "Models/MiniCPM5/stateful-256.mlpackage"
     manifest.asset.variants?["256"]?.decodePath = "Models/MiniCPM5/stateful-256.mlpackage"
+    manifest.asset.variants?["512"]?.prefillPath = "Models/MiniCPM5/stateful-512.mlpackage"
+    manifest.asset.variants?["512"]?.decodePath = "Models/MiniCPM5/stateful-512.mlpackage"
     manifest.asset.variants?["256"]?.prefillSHA256 = try ArtifactDigest.sha256Hex(for: statefulURL)
     manifest.asset.variants?["256"]?.decodeSHA256 = try ArtifactDigest.sha256Hex(for: statefulURL)
     manifest.asset.variants?["256"]?.tokenizerSHA256 = try ArtifactDigest.sha256Hex(for: tokenizerURL)

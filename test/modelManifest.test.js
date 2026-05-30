@@ -118,6 +118,12 @@ test("runtime graph schema must expose logits and layered KV IO names", () => {
 test("runtime graph schema can declare stateful KV graph interface", () => {
   const manifest = clone(validManifest);
   manifest.runtime.graphSchema.interface = "stateful-kv";
+  manifest.asset.prefillPath = "Models/MiniCPM5/stateful-512.mlpackage";
+  manifest.asset.decodePath = "Models/MiniCPM5/stateful-512.mlpackage";
+  manifest.asset.variants["256"].prefillPath = "Models/MiniCPM5/stateful-256.mlpackage";
+  manifest.asset.variants["256"].decodePath = "Models/MiniCPM5/stateful-256.mlpackage";
+  manifest.asset.variants["512"].prefillPath = "Models/MiniCPM5/stateful-512.mlpackage";
+  manifest.asset.variants["512"].decodePath = "Models/MiniCPM5/stateful-512.mlpackage";
 
   const result = validateModelManifest(manifest);
 
@@ -130,11 +136,31 @@ test("runtime graph schema can declare stateful step KV graph interface", () => 
   manifest.runtime.graphSchema.interface = "stateful-step-kv";
   manifest.runtime.graphSchema.decode.tokenID = "input_ids";
   manifest.runtime.graphSchema.decode.positionID = "position_ids";
+  manifest.asset.prefillPath = "Models/MiniCPM5/stateful-step-512.mlpackage";
+  manifest.asset.decodePath = "Models/MiniCPM5/stateful-step-512.mlpackage";
+  manifest.asset.variants["256"].prefillPath = "Models/MiniCPM5/stateful-step-256.mlpackage";
+  manifest.asset.variants["256"].decodePath = "Models/MiniCPM5/stateful-step-256.mlpackage";
+  manifest.asset.variants["512"].prefillPath = "Models/MiniCPM5/stateful-step-512.mlpackage";
+  manifest.asset.variants["512"].decodePath = "Models/MiniCPM5/stateful-step-512.mlpackage";
 
   const result = validateModelManifest(manifest);
 
   assert.equal(result.ok, true);
   assert.deepEqual(result.errors, []);
+});
+
+test("stateful graph manifests require shared prefill and decode artifacts", () => {
+  const manifest = clone(validManifest);
+  manifest.runtime.graphSchema.interface = "stateful-step-kv";
+  manifest.runtime.graphSchema.decode.tokenID = "input_ids";
+  manifest.runtime.graphSchema.decode.positionID = "position_ids";
+
+  const result = validateModelManifest(manifest);
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /stateful Core ML graphs must use the same artifact path for prefill and decode/);
+  assert.match(result.errors.join("\n"), /asset\.variants\.256 must use the same artifact path for prefill and decode for stateful Core ML graphs/);
+  assert.match(result.errors.join("\n"), /asset\.variants\.512 must use the same artifact path for prefill and decode for stateful Core ML graphs/);
 });
 
 test("runtime KV cache mode must stay in the explicit Swift update strategy set", () => {
