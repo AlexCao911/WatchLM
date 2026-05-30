@@ -336,8 +336,8 @@ function validateQuantization(manifest, errors) {
     errors.push("quantization.strategy must be mixed-precision-fidelity-first");
   }
 
-  if (quantization.kvCache !== "int8") {
-    errors.push("quantization.kvCache must be int8");
+  if (!["fp16", "int8"].includes(quantization.kvCache)) {
+    errors.push("quantization.kvCache must be fp16 or int8");
   }
 
   if (quantization.structuralReduction !== false) {

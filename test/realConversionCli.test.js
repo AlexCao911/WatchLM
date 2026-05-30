@@ -225,6 +225,37 @@ print(json.dumps({"plan": plan, "audit": audit}, sort_keys=True))
   assert.deepEqual(result.audit.passes.int4.selectedByLayer, { "12": 1 });
 });
 
+test("prefill KV protected policy keeps attention and KV cache at fp16", async () => {
+  const { stdout } = await execFileAsync(python, [
+    conversionScript,
+    "--compression",
+    "mixed",
+    "--precision-policy",
+    "tools/conversion/mixed-precision-policy-prefill-kv-protected.json",
+    "--describe-compression-policy"
+  ], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const plan = JSON.parse(stdout);
+  const int8Pass = plan.compressionPasses.find((pass) => pass.precision === "int8");
+  const int4Pass = plan.compressionPasses.find((pass) => pass.precision === "int4");
+
+  assert.equal(plan.policyId, "prefill-kv-fp16-attn-ffn12-int4");
+  assert.equal(plan.kvCachePrecision, "fp16");
+  assert.equal(plan.componentPrecision.attentionQKO, "fp16");
+  assert.equal(plan.componentPrecision.attentionV, "fp16");
+  assert.equal(plan.layerPrecision["12"].ffn, "int4");
+  assert.ok(int8Pass.opNamePatterns.includes("lm_head"));
+  assert.ok(!int8Pass.opNamePatterns.includes("self_attn.q_proj"));
+  assert.ok(!int8Pass.opNamePatterns.includes("self_attn.v_proj"));
+  assert.ok(int4Pass.opNamePatterns.includes("mlp.down_proj"));
+  assert.ok(int4Pass.opNamePatterns.includes("mlp.gate_proj"));
+  assert.ok(int4Pass.opNamePatterns.includes("mlp.up_proj"));
+  assert.ok(!int4Pass.opNamePatterns.includes("self_attn.q_proj"));
+  assert.ok(!int4Pass.opNamePatterns.includes("self_attn.v_proj"));
+});
+
 test("real MiniCPM conversion CLI can reject source package compression without a compression mode", async () => {
   await assert.rejects(
     execFileAsync(python, [

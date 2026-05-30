@@ -97,6 +97,15 @@ For a conservative first pass, use an explicit layer override policy that only p
   --describe-compression-policy
 ```
 
+After Swift/Core ML diagnostics showed that global int8 prefill KV can flip the first decode top-1, use the prefill-protected policy when testing prefill-KV recompression. It keeps attention Q/K/O/V and KV cache policy at fp16, keeps most FFN weights at int8, and only allows layer 12 FFN to use int4:
+
+```sh
+.venv/bin/python tools/conversion/convert-minicpm5-coreml.py \
+  --compression mixed \
+  --precision-policy tools/conversion/mixed-precision-policy-prefill-kv-protected.json \
+  --describe-compression-policy
+```
+
 If the fp16 graph already exists, compress it directly without re-running PyTorch tracing and Core ML conversion:
 
 ```sh

@@ -495,8 +495,8 @@ def load_mixed_precision_policy(policy_path: str | Path) -> dict[str, Any]:
         raise ValueError("mixed precision policy strategy must be mixed-precision-fidelity-first")
 
     kv_cache = policy.get("kvCache") or quantization.get("kvCache")
-    if kv_cache != "int8":
-        raise ValueError("mixed precision policy kvCache must be int8")
+    if kv_cache not in {"fp16", "int8"}:
+        raise ValueError("mixed precision policy kvCache must be fp16 or int8")
 
     structural_reduction = policy.get("structuralReduction", quantization.get("structuralReduction"))
     if structural_reduction is not False:

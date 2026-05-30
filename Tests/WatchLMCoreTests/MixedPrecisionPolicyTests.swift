@@ -22,6 +22,16 @@ import Testing
     #expect(policy.precision(for: .attentionQKO, layer: 12) == .int8)
 }
 
+@Test func mixedPrecisionPolicyAllowsFloat16KVCacheForFidelityProfiles() throws {
+    var manifest = try loadSampleManifest()
+    manifest.quantization.kvCache = "fp16"
+
+    let policy = try MixedPrecisionPolicy(manifest: manifest)
+
+    #expect(policy.kvCache == .fp16)
+    #expect(policy.kvCacheDescriptorPrecision == .float16)
+}
+
 @Test func mixedPrecisionPolicyRejectsUniformLowBitOrStructuralReduction() throws {
     var manifest = try loadSampleManifest()
     manifest.quantization.strategy = "uniform-int4"
@@ -43,6 +53,13 @@ import Testing
     manifest.quantization.weights.ffn = "int2"
 
     #expect(throws: MixedPrecisionPolicyError.unsupportedPrecision("int2")) {
+        _ = try MixedPrecisionPolicy(manifest: manifest)
+    }
+
+    manifest = try loadSampleManifest()
+    manifest.quantization.kvCache = "int4"
+
+    #expect(throws: MixedPrecisionPolicyError.unsupportedKVCachePrecision("int4")) {
         _ = try MixedPrecisionPolicy(manifest: manifest)
     }
 }

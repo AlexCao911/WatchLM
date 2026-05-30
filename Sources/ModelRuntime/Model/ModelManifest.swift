@@ -82,8 +82,8 @@ public struct ModelManifest: Codable, Equatable, Sendable {
             errors.append("quantization.strategy must be mixed-precision-fidelity-first")
         }
 
-        if quantization.kvCache != "int8" {
-            errors.append("quantization.kvCache must be int8")
+        if quantization.kvCache != "fp16" && quantization.kvCache != "int8" {
+            errors.append("quantization.kvCache must be fp16 or int8")
         }
 
         if quantization.structuralReduction {

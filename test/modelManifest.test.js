@@ -182,17 +182,26 @@ test("model assets must include SE 2 and SE 3 quantized variants", () => {
   assert.match(result.errors.join("\n"), /asset\.variants\.256 must be present for watch-se-2/);
 });
 
-test("quantization policy must be mixed precision with int8 KV cache", () => {
+test("quantization policy allows fp16 KV cache for fidelity profiles", () => {
+  const manifest = clone(validManifest);
+  manifest.quantization.kvCache = "fp16";
+
+  const result = validateModelManifest(manifest);
+
+  assert.equal(result.ok, true);
+});
+
+test("quantization policy must be mixed precision with supported KV cache", () => {
   const manifest = clone(validManifest);
   manifest.quantization.strategy = "uniform-int4";
-  manifest.quantization.kvCache = "fp16";
+  manifest.quantization.kvCache = "int4";
   manifest.quantization.structuralReduction = true;
 
   const result = validateModelManifest(manifest);
 
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /quantization\.strategy must be mixed-precision-fidelity-first/);
-  assert.match(result.errors.join("\n"), /quantization\.kvCache must be int8/);
+  assert.match(result.errors.join("\n"), /quantization\.kvCache must be fp16 or int8/);
   assert.match(result.errors.join("\n"), /structuralReduction must be false/);
 });
 

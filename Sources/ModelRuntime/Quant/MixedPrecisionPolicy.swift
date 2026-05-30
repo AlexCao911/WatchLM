@@ -75,7 +75,7 @@ public struct MixedPrecisionPolicy: Codable, Equatable, Sendable {
         }
 
         let kvCache = try Self.parsePrecision(quantization.kvCache)
-        guard kvCache == .int8 else {
+        guard kvCache == .fp16 || kvCache == .int8 else {
             throw MixedPrecisionPolicyError.unsupportedKVCachePrecision(quantization.kvCache)
         }
 
