@@ -204,6 +204,7 @@ Attention int4:
   layer11-12 V-only: passes
   layer10-13 V-only: passes
   layer8-15 V-only: matches fp16 on batch10 cap2
+  layer8-15 V + layer11-12 QK: fails at prefix 2
 ```
 
 ## Updated Search Rules
@@ -267,6 +268,11 @@ The QK-vs-O split adds one more clue: layer11-12 QK-only also matches fp16 on
 the current batch10 cap2 gate, while O-only regresses `watch-utility-001`. This
 argues for keeping O protected and treating QK as a small candidate ingredient,
 not as a broad attention recipe.
+
+The first direct composition of layer8-15 V-only with layer11-12 QK-only then
+failed at prefix 2. That makes the community prior more important: the next
+step should be measured sensitivity / activation-aware ranking, not additive
+composition of locally stable subgroups.
 
 Parallel to this, WatchLM should plan a calibrated quantization path rather than
 relying only on Core ML post-conversion palettization:

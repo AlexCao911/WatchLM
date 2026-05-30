@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "policyId": "stateful-step-layer8-15-v-layer11-12-qk-int4-rest-fp16",
+  "strategy": "mixed-precision-fidelity-first",
+  "layerCount": 24,
+  "protectedEdgeLayerCount": 0,
+  "weights": {
+    "embedding": "fp16",
+    "lmHead": "fp16",
+    "norms": "fp16",
+    "attentionQKO": "fp16",
+    "attentionV": "fp16",
+    "ffn": "fp16"
+  },
+  "layerOverrides": {
+    "attentionQKO": {
+      "11": "int4",
+      "12": "int4"
+    },
+    "attentionV": {
+      "8": "int4",
+      "9": "int4",
+      "10": "int4",
+      "11": "int4",
+      "12": "int4",
+      "13": "int4",
+      "14": "int4",
+      "15": "int4"
+    }
+  },
+  "opNamePatterns": {
+    "attentionQKO": [
+      "self_attn.q_proj",
+      "self_attn.k_proj",
+      "attention.wq",
+      "attention.wk"
+    ]
+  },
+  "kvCache": "fp16",
+  "structuralReduction": false
+}

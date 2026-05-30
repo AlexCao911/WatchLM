@@ -189,6 +189,13 @@ layer8-15 V-only + layer11-12 QK-only
 or an activation-aware sensitivity scorer that decides whether Q/K expansion
 should stay limited to layer11-12.
 
+Follow-up note: the `layer8-15 V-only + layer11-12 QK-only` composition was
+tested next and failed at prefix 2. See:
+
+```text
+docs/benchmarks/2026-05-30-stateful-step-layer8-15-v-layer11-12-qk-int4.md
+```
+
 Because QK-only compresses very few tensors, it is not itself a Watch SE
 deployment strategy. Its value is directional: Q/K can be explored more
 carefully, while O should not be widened based on the current evidence.

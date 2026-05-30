@@ -1460,6 +1460,92 @@ print(json.dumps({"plan": plan, "audit": audit}, sort_keys=True))
   });
 });
 
+test("stateful step layer8-15 V plus layer11-12 QK int4 policy composes safe attention axes", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+class FakeOp:
+    def __init__(self, name):
+        self.name = name
+
+policy = module.load_mixed_precision_policy(
+    "tools/conversion/mixed-precision-policy-stateful-step-layer8-15-v-layer11-12-qk-int4.json"
+)
+plan = module.build_mixed_compression_plan(policy)
+audit = module.new_mixed_compression_audit(policy)
+int4_selector = module.make_mixed_precision_op_selector(policy, "int4", audit)
+
+for layer in range(8, 16):
+    assert int4_selector(FakeOp(f"model_layers_{layer}_self_attn_v_proj_weight"))
+    assert not int4_selector(FakeOp(f"model_layers_{layer}_self_attn_o_proj_weight"))
+    assert not int4_selector(FakeOp(f"model_layers_{layer}_mlp_down_proj_weight"))
+
+for layer in range(11, 13):
+    assert int4_selector(FakeOp(f"model_layers_{layer}_self_attn_q_proj_weight"))
+    assert int4_selector(FakeOp(f"model_layers_{layer}_self_attn_k_proj_weight"))
+
+for layer in [8, 9, 10, 13, 14, 15]:
+    assert not int4_selector(FakeOp(f"model_layers_{layer}_self_attn_q_proj_weight"))
+    assert not int4_selector(FakeOp(f"model_layers_{layer}_self_attn_k_proj_weight"))
+
+assert not int4_selector(FakeOp("model_layers_7_self_attn_v_proj_weight"))
+assert not int4_selector(FakeOp("model_layers_16_self_attn_v_proj_weight"))
+assert not int4_selector(FakeOp("model_layers_10_self_attn_q_proj_weight"))
+assert not int4_selector(FakeOp("model_layers_13_self_attn_k_proj_weight"))
+print(json.dumps({"plan": plan, "audit": audit}, sort_keys=True))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const result = JSON.parse(stdout);
+  const { plan, audit } = result;
+  const int4Pass = plan.compressionPasses.find((pass) => pass.precision === "int4");
+
+  assert.equal(plan.policyId, "stateful-step-layer8-15-v-layer11-12-qk-int4-rest-fp16");
+  assert.deepEqual(int4Pass.opNamePatterns, [
+    "attention.wk",
+    "attention.wq",
+    "attention.wv",
+    "self_attn.k_proj",
+    "self_attn.q_proj",
+    "self_attn.v_proj"
+  ]);
+  for (const layer of ["8", "9", "10", "13", "14", "15"]) {
+    assert.equal(plan.layerPrecision[layer].attentionQKO, "fp16");
+    assert.equal(plan.layerPrecision[layer].attentionV, "int4");
+    assert.equal(plan.layerPrecision[layer].ffn, "fp16");
+  }
+  for (const layer of ["11", "12"]) {
+    assert.equal(plan.layerPrecision[layer].attentionQKO, "int4");
+    assert.equal(plan.layerPrecision[layer].attentionV, "int4");
+    assert.equal(plan.layerPrecision[layer].ffn, "fp16");
+  }
+  assert.equal(plan.layerPrecision["7"].attentionV, "fp16");
+  assert.equal(plan.layerPrecision["16"].attentionV, "fp16");
+  assert.equal(audit.passes.int4.selectedOpCount, 12);
+  assert.deepEqual(audit.passes.int4.selectedByComponent, {
+    attentionQKO: 4,
+    attentionV: 8
+  });
+  assert.deepEqual(audit.passes.int4.selectedByLayer, {
+    "8": 1,
+    "9": 1,
+    "10": 1,
+    "11": 3,
+    "12": 3,
+    "13": 1,
+    "14": 1,
+    "15": 1
+  });
+});
+
 test("stateful step layer11 attention-only int4 policy tests the left neighbor of layer12", async () => {
   const { stdout } = await execFileAsync(python, ["-c", `
 import importlib.util

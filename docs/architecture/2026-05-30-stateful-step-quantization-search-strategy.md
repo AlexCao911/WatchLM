@@ -157,6 +157,15 @@ prefix:          both have high overlap with fp16, so batch gate is needed
 decision:        QK is a plausible small ingredient; keep O protected
 ```
 
+Layer8-15 V-only plus layer11-12 QK-only int4:
+
+```text
+quality: 0.0 token agreement on en-short-001
+prefix:  prefix 2 overlap drops to 0/5 and remains 0/5
+decision: V-only and QK-only do not compose additively; same-layer QK/V
+          interaction is unsafe under current Core ML int4 palettization
+```
+
 Layer10-13 V-only int4:
 
 ```text
@@ -192,7 +201,7 @@ Protect:
 
 Expand first:
   middle-layer V projections
-  narrowly scoped QK projections after batch-level evidence
+  narrowly scoped QK projections only when not combined with same-layer V int4
 
 Split if drift appears:
   keep O separate and protected until calibrated evidence changes this
@@ -212,9 +221,7 @@ The next work should therefore pivot to evidence-led candidates:
 calibration set + sensitivity scorer
 per-tensor / per-projection error metrics
 V-only expansion as the immediate safe attention subcomponent
-layer8-15 V-only + layer11-12 QK-only as the next local composition check
-combine layer8-15 V-only with another safe compression axis only after an
-equally strong gate exists for that axis
+same-layer QK/V interaction isolation if another local attention check is needed
 groupwise or importance-aware int4 before retrying FFN or wider attention
 ```
 

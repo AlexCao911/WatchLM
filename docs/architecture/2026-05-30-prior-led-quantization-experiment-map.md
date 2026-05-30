@@ -145,6 +145,14 @@ prefix: high top-5 overlap, with one full-prompt top-5 drift
 batch:  matches fp16 batch10 cap2 token agreement at 0.9
 ```
 
+Layer8-15 V-only plus layer11-12 QK-only:
+
+```text
+prefix: diverges at prefix 2 with 0/5 top-5 overlap after that point
+quality: 0.0 token agreement on teacher smoke
+decision: locally safe axes do not compose additively
+```
+
 ## Updated Interpretation
 
 The layer11-12 attention failure is no longer best explained as:
@@ -177,26 +185,14 @@ The working interpretation is interaction/accumulation, not a simple rule that
 all Q/K/O tensors are unsafe. QK can be explored as a small ingredient; O should
 remain high precision.
 
+The first composition check then failed immediately. This means QK-only and
+V-only should not be treated as independent compression axes. In layers 11 and
+12, quantizing Q, K, and V together is already enough to collapse logits even
+when O remains fp16.
+
 ## Next Experiments
 
-1. Combine layer8-15 V-only with layer11-12 QK-only
-
-Question:
-
-```text
-Can the two locally safe attention ingredients compose without triggering the
-same interaction failure as Q/K/O?
-```
-
-Why this is useful:
-
-```text
-V-only is quality-stable but too small to solve size. QK-only is the first
-additional attention axis with batch parity, but composition must be tested
-before widening.
-```
-
-2. Activation-aware sensitivity scorer
+1. Activation-aware sensitivity scorer
 
 Question:
 
@@ -210,6 +206,22 @@ Why this is useful:
 ```text
 This turns the search from layer guessing into an AWQ/imatrix-style importance
 measurement loop.
+```
+
+2. Same-layer QK/V interaction isolation
+
+Question:
+
+```text
+Does QK remain stable if V is kept fp16 specifically in layers 11 and 12 while
+the rest of the layer8-15 V-only window stays compressed?
+```
+
+Why this is useful:
+
+```text
+This is a narrow follow-up to the failed composition. It separates same-layer
+QK/V interaction from wider V-window interaction.
 ```
 
 3. Calibrated PyTorch-side palettization
@@ -254,5 +266,7 @@ layer8-15 V-only int4
 ```
 
 Layer8-15 V-only now passes the current batch gate at fp16 parity. The next
-small local ingredient is layer11-12 QK-only. The next broad direction should
-be the activation-aware sensitivity scorer for larger targets such as FFN.
+composition with layer11-12 QK-only failed immediately. The next broad direction
+should be the activation-aware sensitivity scorer for larger targets such as
+FFN. Any further local attention experiment should isolate same-layer QK/V
+interaction, not widen another window.
