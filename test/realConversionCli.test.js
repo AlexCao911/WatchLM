@@ -110,6 +110,34 @@ print("ok")
   assert.equal(stdout.trim(), "ok");
 });
 
+test("source mlpackage compression reports context inferred from source package name", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+from pathlib import Path
+from types import SimpleNamespace
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+source_args = SimpleNamespace(
+    context_tokens=16,
+    source_mlpackage="artifacts/coreml/real-minicpm5-decode-256/decode-256.mlpackage",
+)
+fresh_args = SimpleNamespace(context_tokens=16, source_mlpackage=None)
+
+assert module.reported_context_tokens(source_args) == 256
+assert module.reported_context_tokens(fresh_args) == 16
+print("ok")
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+
+  assert.equal(stdout.trim(), "ok");
+});
+
 test("mixed precision op selectors record component and layer audit evidence", async () => {
   const { stdout } = await execFileAsync(python, ["-c", `
 import importlib.util

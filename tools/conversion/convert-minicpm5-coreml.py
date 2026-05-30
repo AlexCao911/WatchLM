@@ -136,7 +136,7 @@ def main() -> None:
     report_path = output_dir / "conversion-report.json"
     report: dict[str, Any] = {
         "modelId": args.model_id,
-        "contextTokens": args.context_tokens,
+        "contextTokens": reported_context_tokens(args),
         "computePrecision": args.compute_precision,
         "graph": args.graph,
         "compression": args.compression,
@@ -235,6 +235,22 @@ def parse_args() -> argparse.Namespace:
     if args.source_mlpackage and args.compression == "none":
         parser.error("--source-mlpackage requires --compression int8, int4, or mixed")
     return args
+
+
+def reported_context_tokens(args: argparse.Namespace) -> int:
+    if args.source_mlpackage:
+        inferred = infer_context_tokens_from_path(args.source_mlpackage)
+        if inferred is not None:
+            return inferred
+    return args.context_tokens
+
+
+def infer_context_tokens_from_path(path: str | Path) -> int | None:
+    name = Path(path).name
+    match = re.search(r"(?:^|[-_])(?:context)?(\d+)(?:[-_.]|$)", name)
+    if match:
+        return int(match.group(1))
+    return None
 
 
 def run_stage(report: dict[str, Any], name: str, action):
