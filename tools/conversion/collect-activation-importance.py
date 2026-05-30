@@ -37,7 +37,8 @@ def main() -> None:
         )
 
     encoded = json.dumps(report, indent=2, sort_keys=True)
-    print(encoded)
+    if not args.quiet:
+        print(encoded)
     if args.output:
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -52,6 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
     parser.add_argument("--output")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--max-prompts", type=int)
     parser.add_argument("--top-columns", type=int, default=16)
     parser.add_argument("--device", choices=["auto", "cpu", "mps"], default="auto")
@@ -243,8 +245,57 @@ def build_report(
             "topColumns": args.top_columns,
         },
         "targetComponents": TARGET_COMPONENTS,
+        "componentSummary": component_summary(modules),
+        "layerSummary": layer_summary(modules),
         "modules": modules,
     }
+
+
+def component_summary(modules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for item in modules:
+        grouped.setdefault(str(item["component"]), []).append(item)
+
+    summary: list[dict[str, Any]] = []
+    for component in sorted(grouped):
+        values = [float(item["totalActivationEnergy"]) for item in grouped[component]]
+        total = sum(values)
+        summary.append(
+            {
+                "component": component,
+                "moduleCount": len(values),
+                "totalActivationEnergy": total,
+                "meanModuleActivationEnergy": total / max(1, len(values)),
+                "maxModuleActivationEnergy": max(values) if values else 0.0,
+            }
+        )
+    return summary
+
+
+def layer_summary(modules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[int, list[dict[str, Any]]] = {}
+    for item in modules:
+        layer_index = item.get("layerIndex")
+        if layer_index is None:
+            continue
+        grouped.setdefault(int(layer_index), []).append(item)
+
+    summary: list[dict[str, Any]] = []
+    for layer_index in sorted(grouped):
+        items = grouped[layer_index]
+        component_totals: dict[str, float] = {}
+        for item in items:
+            component = str(item["component"])
+            component_totals[component] = component_totals.get(component, 0.0) + float(item["totalActivationEnergy"])
+        summary.append(
+            {
+                "layerIndex": layer_index,
+                "moduleCount": len(items),
+                "totalActivationEnergy": sum(component_totals.values()),
+                "componentTotals": dict(sorted(component_totals.items())),
+            }
+        )
+    return summary
 
 
 def load_conversion_module():

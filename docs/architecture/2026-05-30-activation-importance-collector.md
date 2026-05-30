@@ -32,6 +32,8 @@ sourceModelId
 calibration suite summary
 collection mode and statistic
 target components
+component summary
+layer summary
 per-module activation energy summaries
 ```
 
@@ -87,15 +89,57 @@ Full collection, when local weights are available:
 .venv/bin/python tools/conversion/collect-activation-importance.py \
   --calibration-prompts tools/benchmark/fixtures/calibration-prompts.json \
   --cache-dir artifacts/hf/MiniCPM5-1B \
+  --quiet \
   --output artifacts/benchmarks/minicpm5-activation-importance.json
 ```
 
+## First Real Smoke Collection
+
+After the schema was added, the collector was run against the local
+MiniCPM5-1B safetensors with one calibration prompt:
+
+```bash
+.venv/bin/python tools/conversion/collect-activation-importance.py \
+  --calibration-prompts tools/benchmark/fixtures/calibration-prompts.json \
+  --cache-dir artifacts/hf/MiniCPM5-1B \
+  --max-prompts 1 \
+  --top-columns 8 \
+  --device cpu \
+  --output artifacts/benchmarks/minicpm5-activation-importance-cal1.json
+```
+
+The run loaded the local 2.0 GB safetensors checkpoint and produced a report
+with 218 module summaries in about 2-3 seconds after model load.
+
+This proves the collector can execute the real model path locally, not only the
+dry-run schema path.
+
+The collector was then run over the full 12-prompt calibration suite:
+
+```bash
+.venv/bin/python tools/conversion/collect-activation-importance.py \
+  --calibration-prompts tools/benchmark/fixtures/calibration-prompts.json \
+  --cache-dir artifacts/hf/MiniCPM5-1B \
+  --top-columns 8 \
+  --device cpu \
+  --quiet \
+  --output artifacts/benchmarks/minicpm5-activation-importance-cal12.json
+```
+
+The full suite produced 218 module summaries and component/layer aggregates in
+about 5 seconds after model load. This is now a usable input for policy
+candidate generation.
+
 ## Current Limitations
 
-This commit proves the report schema and dry-run path. It does not yet include
-a committed full MiniCPM5 activation report, because that requires loading the
-local 1B model weights.
+The full 12-prompt report is still calibration evidence, not final quality
+evidence. Any policy generated from it must still pass Core ML conversion and
+the Swift quantization sensitivity scorer.
 
-The next step is to run the collector against local weights, then use the
-result to generate a small set of importance-guided Core ML mixed precision
-candidates.
+`norms` activation energy is also much larger than linear-layer energy and
+should not be compared directly against Q/K/V/FFN totals for int4 selection.
+Norms remain protected by policy. The useful ranking target is primarily within
+linear module families and layers.
+
+The next step is to use the full report to generate a small set of
+importance-guided Core ML mixed precision candidates.

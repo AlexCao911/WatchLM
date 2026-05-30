@@ -52,7 +52,31 @@ test("activation importance CLI emits a dry-run report from calibration prompts"
     "lmHead",
     "norms"
   ]);
+  assert.deepEqual(report.componentSummary, []);
+  assert.deepEqual(report.layerSummary, []);
   assert.deepEqual(report.modules, []);
+});
+
+test("activation importance CLI can write quietly for long real-model runs", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "watchlm-importance-quiet-"));
+  const outputPath = path.join(tempDir, "importance.json");
+  const { stdout } = await execFileAsync(python, [
+    collectorScript,
+    "--calibration-prompts",
+    calibrationPromptsPath,
+    "--dry-run",
+    "--quiet",
+    "--output",
+    outputPath
+  ], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const report = JSON.parse(await readFile(outputPath, "utf8"));
+
+  assert.equal(stdout, "");
+  assert.equal(report.collection.mode, "dry-run");
+  assert.equal(report.calibration.promptCount, 12);
 });
 
 test("activation importance module classifier maps MiniCPM tensor families", async () => {
@@ -87,5 +111,71 @@ print(json.dumps([module.classify_module_name(name) for name in names]))
     "embedding",
     "lmHead",
     "norms"
+  ]);
+});
+
+test("activation importance summary aggregates modules by component and layer", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+
+script = Path("tools/conversion/collect-activation-importance.py").resolve()
+spec = importlib.util.spec_from_file_location("collect_activation_importance", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+modules = [
+    {"name": "model.layers.0.self_attn.q_proj", "component": "attentionQKO", "layerIndex": 0, "totalActivationEnergy": 10.0},
+    {"name": "model.layers.0.self_attn.k_proj", "component": "attentionQKO", "layerIndex": 0, "totalActivationEnergy": 30.0},
+    {"name": "model.layers.1.mlp.down_proj", "component": "ffn", "layerIndex": 1, "totalActivationEnergy": 60.0},
+    {"name": "lm_head", "component": "lmHead", "layerIndex": None, "totalActivationEnergy": 100.0},
+]
+print(json.dumps({
+    "component": module.component_summary(modules),
+    "layer": module.layer_summary(modules),
+}, sort_keys=True))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const summary = JSON.parse(stdout);
+
+  assert.deepEqual(summary.component, [
+    {
+      component: "attentionQKO",
+      maxModuleActivationEnergy: 30,
+      meanModuleActivationEnergy: 20,
+      moduleCount: 2,
+      totalActivationEnergy: 40
+    },
+    {
+      component: "ffn",
+      maxModuleActivationEnergy: 60,
+      meanModuleActivationEnergy: 60,
+      moduleCount: 1,
+      totalActivationEnergy: 60
+    },
+    {
+      component: "lmHead",
+      maxModuleActivationEnergy: 100,
+      meanModuleActivationEnergy: 100,
+      moduleCount: 1,
+      totalActivationEnergy: 100
+    }
+  ]);
+  assert.deepEqual(summary.layer, [
+    {
+      componentTotals: { attentionQKO: 40 },
+      layerIndex: 0,
+      moduleCount: 2,
+      totalActivationEnergy: 40
+    },
+    {
+      componentTotals: { ffn: 60 },
+      layerIndex: 1,
+      moduleCount: 1,
+      totalActivationEnergy: 60
+    }
   ]);
 });
