@@ -764,6 +764,57 @@ print(json.dumps({"plan": plan, "audit": audit}, sort_keys=True))
   assert.deepEqual(audit.passes.int4.selectedByLayer, { "0": 3 });
 });
 
+test("stateful step layer12 FFN-only int4 policy isolates a middle FFN layer", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+class FakeOp:
+    def __init__(self, name):
+        self.name = name
+
+policy = module.load_mixed_precision_policy("tools/conversion/mixed-precision-policy-stateful-step-layer12-ffn-int4.json")
+plan = module.build_mixed_compression_plan(policy)
+audit = module.new_mixed_compression_audit(policy)
+int4_selector = module.make_mixed_precision_op_selector(policy, "int4", audit)
+
+assert int4_selector(FakeOp("model_layers_12_mlp_gate_proj_weight"))
+assert int4_selector(FakeOp("model_layers_12_mlp_up_proj_weight"))
+assert int4_selector(FakeOp("model_layers_12_mlp_down_proj_weight"))
+assert not int4_selector(FakeOp("model_layers_12_self_attn_q_proj_weight"))
+assert not int4_selector(FakeOp("model_layers_11_mlp_down_proj_weight"))
+assert not int4_selector(FakeOp("model_layers_13_mlp_down_proj_weight"))
+print(json.dumps({"plan": plan, "audit": audit}, sort_keys=True))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const result = JSON.parse(stdout);
+  const { plan, audit } = result;
+
+  assert.equal(plan.policyId, "stateful-step-layer12-ffn-int4-rest-fp16");
+  assert.equal(plan.componentPrecision.embedding, "fp16");
+  assert.equal(plan.componentPrecision.lmHead, "fp16");
+  assert.equal(plan.componentPrecision.attentionQKO, "fp16");
+  assert.equal(plan.componentPrecision.attentionV, "fp16");
+  assert.equal(plan.componentPrecision.ffn, "fp16");
+  assert.equal(plan.layerPrecision["12"].attentionQKO, "fp16");
+  assert.equal(plan.layerPrecision["12"].attentionV, "fp16");
+  assert.equal(plan.layerPrecision["12"].ffn, "int4");
+  assert.equal(plan.layerPrecision["11"].ffn, "fp16");
+  assert.equal(plan.layerPrecision["13"].ffn, "fp16");
+  assert.deepEqual(plan.compressionPasses.map((pass) => pass.precision), ["int4"]);
+  assert.equal(audit.passes.int4.selectedOpCount, 3);
+  assert.deepEqual(audit.passes.int4.selectedByComponent, { ffn: 3 });
+  assert.deepEqual(audit.passes.int4.selectedByLayer, { "12": 3 });
+});
+
 test("real MiniCPM conversion CLI can reject source package compression without a compression mode", async () => {
   await assert.rejects(
     execFileAsync(python, [
