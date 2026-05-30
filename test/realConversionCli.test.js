@@ -256,6 +256,31 @@ test("prefill KV protected policy keeps attention and KV cache at fp16", async (
   assert.ok(!int4Pass.opNamePatterns.includes("self_attn.v_proj"));
 });
 
+test("prefill KV protected no-int4 policy emits only the int8 compression pass", async () => {
+  const { stdout } = await execFileAsync(python, [
+    conversionScript,
+    "--compression",
+    "mixed",
+    "--precision-policy",
+    "tools/conversion/mixed-precision-policy-prefill-kv-protected-no-int4.json",
+    "--describe-compression-policy"
+  ], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const plan = JSON.parse(stdout);
+
+  assert.equal(plan.policyId, "prefill-kv-fp16-attn-ffn-int8");
+  assert.equal(plan.kvCachePrecision, "fp16");
+  assert.equal(plan.componentPrecision.attentionQKO, "fp16");
+  assert.equal(plan.componentPrecision.attentionV, "fp16");
+  assert.equal(plan.layerPrecision["12"].ffn, "int8");
+  assert.deepEqual(plan.compressionPasses.map((pass) => pass.precision), ["int8"]);
+  assert.ok(plan.compressionPasses[0].opNamePatterns.includes("mlp.down_proj"));
+  assert.ok(!plan.compressionPasses[0].opNamePatterns.includes("self_attn.q_proj"));
+  assert.ok(!plan.compressionPasses[0].opNamePatterns.includes("self_attn.v_proj"));
+});
+
 test("real MiniCPM conversion CLI can reject source package compression without a compression mode", async () => {
   await assert.rejects(
     execFileAsync(python, [
