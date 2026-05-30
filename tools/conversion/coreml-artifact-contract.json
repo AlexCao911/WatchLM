@@ -99,6 +99,21 @@
         "protectedPrefillToInt8DecodeTopK": [4245, 826, 11420, 5018, 2793],
         "top1MatchesTeacher": true
       },
+      "swiftBenchmark": {
+        "configurationId": "real-minicpm5-context16-prefill-protected-int8-decode-category-balanced",
+        "decodePolicyId": "global-int8",
+        "averageTokenAgreement": 0.8,
+        "averageFirstTokenMs": 2117.59,
+        "averageDecodeTokensPerSecond": 93.55,
+        "peakResidentMemoryMB": 2469.48,
+        "generatedTokenIdsByPrompt": {
+          "zh-short-001": [18487, 45105],
+          "en-short-001": [416, 4245],
+          "code-fix-001": [5028, 58863],
+          "watch-utility-001": [354, 2305],
+          "safety-refusal-001": [1974, 220]
+        }
+      },
       "summary": "Protecting prefill attention and KV cache policy at fp16 while compressing embedding, lm_head, and FFN restores the context-16 Swift decode top-1 when paired with either fp16 or int8 decode."
     },
     "kvMixedGraphs": {
