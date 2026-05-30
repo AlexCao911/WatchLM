@@ -18,6 +18,7 @@ SOURCE_PREFILL_MODEL = RESOURCES / "SmokePrefill.mlmodel"
 SOURCE_DECODE_MODEL = RESOURCES / "SmokeDecode.mlmodel"
 SOURCE_LAYERED_PREFILL_MODEL = RESOURCES / "SmokeLayeredPrefill.mlpackage"
 SOURCE_LAYERED_DECODE_MODEL = RESOURCES / "SmokeLayeredDecode.mlpackage"
+SOURCE_STATEFUL_KV_MODEL = RESOURCES / "SmokeStatefulKV.mlpackage"
 
 
 def main() -> None:
@@ -27,6 +28,7 @@ def main() -> None:
     write_decode_model()
     write_layered_prefill_model()
     write_layered_decode_model()
+    write_stateful_kv_model()
     compile_variant(SOURCE_MODEL, "macOS", "13.0", "SmokeIdentity_macOS.mlmodelc")
     compile_variant(SOURCE_MODEL, "watchOS", "10.0", "SmokeIdentity_watchOS.mlmodelc")
     compile_variant(SOURCE_PREFILL_MODEL, "macOS", "13.0", "SmokePrefill_macOS.mlmodelc")
@@ -37,6 +39,8 @@ def main() -> None:
     compile_variant(SOURCE_LAYERED_PREFILL_MODEL, "watchOS", "10.0", "SmokeLayeredPrefill_watchOS.mlmodelc")
     compile_variant(SOURCE_LAYERED_DECODE_MODEL, "macOS", "13.0", "SmokeLayeredDecode_macOS.mlmodelc")
     compile_variant(SOURCE_LAYERED_DECODE_MODEL, "watchOS", "10.0", "SmokeLayeredDecode_watchOS.mlmodelc")
+    compile_variant(SOURCE_STATEFUL_KV_MODEL, "macOS", "15.0", "SmokeStatefulKV_macOS.mlmodelc")
+    compile_variant(SOURCE_STATEFUL_KV_MODEL, "watchOS", "11.0", "SmokeStatefulKV_watchOS.mlmodelc")
 
 
 def write_identity_model() -> None:
@@ -142,6 +146,24 @@ class LayeredDecodeSmokeModel(torch.nn.Module):
         return logits, new_key, new_value
 
 
+class StatefulKVSmokeModel(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("last_token", torch.zeros((1,), dtype=torch.float16))
+        self.register_buffer("vocab", torch.arange(8, dtype=torch.float32).view(1, 8))
+
+    def forward(self, input_ids, position_ids, causal_mask):
+        input_zero = input_ids.to(torch.float32).sum() * 0.0
+        position_zero = position_ids.to(torch.float32).sum() * 0.0
+        mask_zero = causal_mask.to(torch.float32).sum() * 0.0
+        target = torch.maximum(
+            self.last_token.to(torch.float32) + 1.0 + input_zero + position_zero + mask_zero,
+            torch.tensor([5.0], dtype=torch.float32),
+        )
+        self.last_token += (target.to(torch.float16) - self.last_token)
+        return -torch.abs(self.vocab - target.view(1, 1)) * 100.0
+
+
 def write_layered_prefill_model() -> None:
     model = LayeredPrefillSmokeModel().eval()
     traced = torch.jit.trace(
@@ -206,6 +228,44 @@ def write_layered_decode_model() -> None:
     mlmodel.author = "WatchLM"
     shutil.rmtree(SOURCE_LAYERED_DECODE_MODEL, ignore_errors=True)
     mlmodel.save(SOURCE_LAYERED_DECODE_MODEL)
+
+
+def write_stateful_kv_model() -> None:
+    model = StatefulKVSmokeModel().eval()
+    traced = torch.jit.trace(
+        model,
+        (
+            torch.ones((1, 1), dtype=torch.int32),
+            torch.ones((1, 1), dtype=torch.int32),
+            torch.zeros((1, 1, 1, 2), dtype=torch.float32),
+        ),
+        check_trace=False,
+    )
+    query_length = ct.RangeDim(lower_bound=1, upper_bound=4, default=1)
+    key_length = ct.RangeDim(lower_bound=1, upper_bound=5, default=2)
+    mlmodel = ct.convert(
+        traced,
+        convert_to="mlprogram",
+        minimum_deployment_target=ct.target.iOS18,
+        inputs=[
+            ct.TensorType(name="input_ids", shape=(1, query_length), dtype=int),
+            ct.TensorType(name="position_ids", shape=(1, query_length), dtype=int),
+            ct.TensorType(name="causal_mask", shape=(1, 1, query_length, key_length), dtype=np.float16),
+        ],
+        outputs=[
+            ct.TensorType(name="logits"),
+        ],
+        states=[
+            ct.StateType(
+                wrapped_type=ct.TensorType(shape=(1,), dtype=np.float16),
+                name="last_token",
+            )
+        ],
+    )
+    mlmodel.short_description = "WatchLM stateful KV smoke ML Program"
+    mlmodel.author = "WatchLM"
+    shutil.rmtree(SOURCE_STATEFUL_KV_MODEL, ignore_errors=True)
+    mlmodel.save(SOURCE_STATEFUL_KV_MODEL)
 
 
 def use_exact_array_mapping(spec) -> None:

@@ -397,17 +397,17 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
         case .statefulKV:
             return (
                 prefillInputs: [
-                    prefillInputName: [1, maxPromptTokens],
-                    prefillPositionInputName: [1, maxPromptTokens],
-                    prefillCausalMaskInputName: [1, 1, maxPromptTokens, maxPromptTokens]
+                    prefillInputName: [1, nil],
+                    prefillPositionInputName: [1, nil],
+                    prefillCausalMaskInputName: [1, 1, nil, nil]
                 ],
                 prefillOutputs: [
                     prefillLogitsOutputName: [1, nil]
                 ],
                 decodeInputs: [
-                    decodeTokenInputName: [1, 1],
-                    decodePositionInputName: [1, 1],
-                    decodeCausalMaskInputName: [1, 1, 1, maxPromptTokens + 1]
+                    decodeTokenInputName: [1, nil],
+                    decodePositionInputName: [1, nil],
+                    decodeCausalMaskInputName: [1, 1, nil, nil]
                 ],
                 decodeOutputs: [
                     decodeLogitsOutputName: [1, nil]

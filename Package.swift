@@ -29,7 +29,8 @@ let package = Package(
                 "Resources/SmokeIdentity.mlmodel",
                 "Resources/SmokeLayeredDecode.mlpackage",
                 "Resources/SmokeLayeredPrefill.mlpackage",
-                "Resources/SmokePrefill.mlmodel"
+                "Resources/SmokePrefill.mlmodel",
+                "Resources/SmokeStatefulKV.mlpackage"
             ],
             resources: [
                 .copy("Resources/SmokeDecode_macOS.mlmodelc"),
@@ -41,7 +42,9 @@ let package = Package(
                 .copy("Resources/SmokeLayeredPrefill_macOS.mlmodelc"),
                 .copy("Resources/SmokeLayeredPrefill_watchOS.mlmodelc"),
                 .copy("Resources/SmokePrefill_macOS.mlmodelc"),
-                .copy("Resources/SmokePrefill_watchOS.mlmodelc")
+                .copy("Resources/SmokePrefill_watchOS.mlmodelc"),
+                .copy("Resources/SmokeStatefulKV_macOS.mlmodelc"),
+                .copy("Resources/SmokeStatefulKV_watchOS.mlmodelc")
             ]
         )
     ]

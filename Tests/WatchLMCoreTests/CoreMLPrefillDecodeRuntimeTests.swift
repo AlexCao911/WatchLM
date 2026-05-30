@@ -66,6 +66,38 @@ import CoreML
     #expect(result.metrics.totalKVAppendMovedScalarCount == 0)
 }
 
+@Test func coreMLPrefillDecodeRuntimeRunsStatefulKVGraph() async throws {
+    guard #available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *) else {
+        return
+    }
+
+    let modelURL = try #require(smokeModelURL(named: "SmokeStatefulKV"))
+    let bundle = CoreMLPrefillDecodeBundle(
+        prefillModelURL: modelURL,
+        decodeModelURL: modelURL,
+        maxPromptTokens: 1,
+        graphInterface: .statefulKV(layerCount: 1, kvHeads: 1, headDimension: 1),
+        decodeTokenInputName: "input_ids",
+        decodePositionInputName: "position_ids"
+    )
+    let runtime = CoreMLPrefillDecodeRuntime(
+        bundle: bundle,
+        tokenizer: FixtureTokenIDTokenizer()
+    )
+
+    let result = try await runtime.generate(
+        request: InferenceRequest(prompt: "B", maxNewTokens: 3),
+        shouldCancel: { false }
+    )
+
+    #expect(result.tokens == ["D", "E", "F"])
+    #expect(result.generatedTokenIDs == [5, 6, 7])
+    #expect(result.terminationReason == .maxTokens)
+    #expect(result.timing.decodeStepMs.count == 2)
+    #expect(result.metrics.kvCacheUpdateStrategy == nil)
+    #expect(result.metrics.kvAppendStepMs.isEmpty)
+}
+
 @Test func coreMLPrefillDecodeDiagnosticsExposePrefillAndDecodeTopK() throws {
     let prefillURL = try #require(smokeModelURL(named: "SmokeLayeredPrefill"))
     let decodeURL = try #require(smokeModelURL(named: "SmokeLayeredDecode"))
