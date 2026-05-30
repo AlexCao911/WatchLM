@@ -116,6 +116,41 @@
       },
       "summary": "Protecting prefill attention and KV cache policy at fp16 while compressing embedding, lm_head, and FFN restores the context-16 Swift decode top-1 when paired with either fp16 or int8 decode."
     },
+    "kvPrefillProtectedNoInt4Graphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-prefill-protected-no-int4/prefill-kv-16-mixed.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16-prefill-protected-no-int4/prefill-kv-16-mixed.mlmodelc",
+      "prefillKVBytes": 1252480141,
+      "quantizationPolicyId": "prefill-kv-fp16-attn-ffn-int8",
+      "selectorAudit": {
+        "int8SelectedOps": 74,
+        "int8SelectedComponents": ["embedding", "ffn", "lmHead"],
+        "int4SelectedOps": 0,
+        "attentionPrecision": "fp16",
+        "kvCachePrecision": "fp16"
+      },
+      "swiftDiagnostic": {
+        "promptId": "en-short-001",
+        "protectedNoInt4PrefillToFP16DecodeTopK": [826, 4245, 11420, 5018, 2793],
+        "protectedNoInt4PrefillToInt8DecodeTopK": [4245, 826, 11420, 5018, 2793],
+        "int8DecodeTop1MatchesTeacher": true
+      },
+      "swiftBenchmark": {
+        "configurationId": "real-minicpm5-context16-prefill-protected-no-int4-int8-decode-category-balanced",
+        "decodePolicyId": "global-int8",
+        "averageTokenAgreement": 1.0,
+        "averageFirstTokenMs": 2453.88,
+        "averageDecodeTokensPerSecond": 86.97,
+        "peakResidentMemoryMB": 2610.58,
+        "generatedTokenIdsByPrompt": {
+          "zh-short-001": [18487, 45105],
+          "en-short-001": [416, 4245],
+          "code-fix-001": [3342, 801],
+          "watch-utility-001": [354, 2305],
+          "safety-refusal-001": [1974, 220]
+        }
+      },
+      "summary": "Keeping prefill attention/KV at fp16 while compressing all FFN, embedding, and lm_head weights to int8 restores 5/5 prompt agreement in the context-16 Swift benchmark with int8 decode."
+    },
     "kvMixedGraphs": {
       "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-mixed/prefill-kv-16-mixed.mlpackage",
       "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16-mixed/decode-16-mixed.mlpackage",

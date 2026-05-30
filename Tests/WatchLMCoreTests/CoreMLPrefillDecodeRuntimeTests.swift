@@ -257,42 +257,53 @@ import CoreML
     let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     let tokenizerURL = root.appending(path: "artifacts/hf/MiniCPM5-1B/tokenizer.json")
     let protectedPrefillURL = root.appending(path: "artifacts/coreml/real-minicpm5-prefill-kv-16-prefill-protected/prefill-kv-16-mixed.mlpackage")
+    let protectedNoInt4PrefillURL = root.appending(path: "artifacts/coreml/real-minicpm5-prefill-kv-16-prefill-protected-no-int4/prefill-kv-16-mixed.mlpackage")
     let fp16DecodeURL = root.appending(path: "artifacts/coreml/real-minicpm5-decode-16/decode-16.mlpackage")
     let int8DecodeURL = root.appending(path: "artifacts/coreml/real-minicpm5-decode-16-int8/decode-16-int8.mlpackage")
     guard [
         tokenizerURL,
-        protectedPrefillURL,
         fp16DecodeURL,
         int8DecodeURL
     ].allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) else {
         return
     }
+    let prefillArtifacts = [
+        ("protected-prefill", protectedPrefillURL),
+        ("protected-no-int4-prefill", protectedNoInt4PrefillURL)
+    ].filter { FileManager.default.fileExists(atPath: $0.1.path) }
+    guard !prefillArtifacts.isEmpty else {
+        return
+    }
 
     let prompt = "Explain in one short paragraph why a split prefill/decode graph helps watch inference."
     let tokenizer = try MiniCPMBytePairTokenizer(tokenizerJSONURL: tokenizerURL, addBosToken: true)
-    let artifacts: [(id: String, decodeURL: URL)] = [
-        ("protected-prefill-fp16-decode", fp16DecodeURL),
-        ("protected-prefill-int8-decode", int8DecodeURL)
+    let decodeArtifacts: [(id: String, url: URL)] = [
+        ("fp16-decode", fp16DecodeURL),
+        ("int8-decode", int8DecodeURL)
     ]
 
     var summaries: [String] = []
-    for artifact in artifacts {
-        let bundle = CoreMLPrefillDecodeBundle.miniCPMExplicitKV(
-            prefillModelURL: protectedPrefillURL,
-            decodeModelURL: artifact.decodeURL,
-            maxPromptTokens: 16
-        )
-        let report = try CoreMLPrefillDecodeDiagnostics(
-            bundle: bundle,
-            tokenizer: tokenizer
-        ).run(prompt: prompt, topK: 5)
+    for prefillArtifact in prefillArtifacts {
+        for decodeArtifact in decodeArtifacts {
+            let bundle = CoreMLPrefillDecodeBundle.miniCPMExplicitKV(
+                prefillModelURL: prefillArtifact.1,
+                decodeModelURL: decodeArtifact.url,
+                maxPromptTokens: 16
+            )
+            let report = try CoreMLPrefillDecodeDiagnostics(
+                bundle: bundle,
+                tokenizer: tokenizer
+            ).run(prompt: prompt, topK: 5)
 
-        #expect(report.prefillTopK.count == 5)
-        #expect(report.decodeTopK.count == 5)
-        #expect(report.firstDecodeTokenID == 4245)
-        summaries.append(
-            "\(artifact.id) prefill=\(report.prefillTopK.map(\.tokenID)) decode=\(report.decodeTopK.map(\.tokenID)) decodeMargin=\(formattedTop1Margin(report.decodeTopK))"
-        )
+            #expect(report.prefillTopK.count == 5)
+            #expect(report.decodeTopK.count == 5)
+            if prefillArtifact.0 == "protected-prefill" || decodeArtifact.id == "int8-decode" {
+                #expect(report.firstDecodeTokenID == 4245)
+            }
+            summaries.append(
+                "\(prefillArtifact.0)-\(decodeArtifact.id) prefill=\(report.prefillTopK.map(\.tokenID)) decode=\(report.decodeTopK.map(\.tokenID)) decodeMargin=\(formattedTop1Margin(report.decodeTopK))"
+            )
+        }
     }
 
     print("WATCHLM_PREFILL_PROTECTED_DIAGNOSTIC \(summaries.joined(separator: " | "))")
