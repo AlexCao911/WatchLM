@@ -1,0 +1,60 @@
+{
+  "candidateEvidence": {
+    "component": "attentionV",
+    "excludedLayers": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      20,
+      21,
+      22,
+      23
+    ],
+    "ranking": "lowest_component_activation_energy",
+    "selectedLayers": [
+      {
+        "componentActivationEnergy": 107708.40625,
+        "layerIndex": 6
+      },
+      {
+        "componentActivationEnergy": 116299.71875,
+        "layerIndex": 7
+      },
+      {
+        "componentActivationEnergy": 119620.703125,
+        "layerIndex": 5
+      },
+      {
+        "componentActivationEnergy": 124729.484375,
+        "layerIndex": 8
+      }
+    ],
+    "sourcePromptCount": 12,
+    "sourceReport": "artifacts/benchmarks/minicpm5-activation-importance-cal12.json"
+  },
+  "kvCache": "fp16",
+  "layerCount": 24,
+  "layerOverrides": {
+    "attentionV": {
+      "5": "int4",
+      "6": "int4",
+      "7": "int4",
+      "8": "int4"
+    }
+  },
+  "policyId": "stateful-step-importance-attention-v-low4-int4-rest-fp16",
+  "protectedEdgeLayerCount": 0,
+  "schemaVersion": 1,
+  "strategy": "mixed-precision-fidelity-first",
+  "structuralReduction": false,
+  "weights": {
+    "attentionQKO": "fp16",
+    "attentionV": "fp16",
+    "embedding": "fp16",
+    "ffn": "fp16",
+    "lmHead": "fp16",
+    "norms": "fp16"
+  }
+}
