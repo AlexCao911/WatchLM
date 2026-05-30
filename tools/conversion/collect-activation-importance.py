@@ -56,8 +56,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--max-prompts", type=int)
     parser.add_argument("--top-columns", type=int, default=16)
+    parser.add_argument("--group-size", type=int, default=32)
+    parser.add_argument("--top-groups", type=int, default=8)
     parser.add_argument("--device", choices=["auto", "cpu", "mps"], default="auto")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.group_size <= 0:
+        parser.error("--group-size must be positive")
+    if args.top_groups <= 0:
+        parser.error("--top-groups must be positive")
+    return args
 
 
 def load_calibration_suite(path: Path) -> dict[str, Any]:
@@ -155,7 +162,12 @@ def collect_importance(args: argparse.Namespace, suite: dict[str, Any]) -> list[
         for hook in hooks:
             hook.remove()
 
-    return summarize_stats(stats, top_columns=args.top_columns)
+    return summarize_stats(
+        stats,
+        top_columns=args.top_columns,
+        group_size=args.group_size,
+        top_groups=args.top_groups,
+    )
 
 
 def make_activation_hook(name: str, component: str, stats: dict[str, dict[str, Any]], torch):
@@ -185,13 +197,20 @@ def make_activation_hook(name: str, component: str, stats: dict[str, dict[str, A
     return hook
 
 
-def summarize_stats(stats: dict[str, dict[str, Any]], top_columns: int) -> list[dict[str, Any]]:
+def summarize_stats(
+    stats: dict[str, dict[str, Any]],
+    top_columns: int,
+    group_size: int = 32,
+    top_groups: int = 8,
+) -> list[dict[str, Any]]:
     modules: list[dict[str, Any]] = []
     for entry in stats.values():
         energy = entry["energy"]
         total = float(energy.sum().item())
         count = min(top_columns, int(energy.numel()))
         top_values, top_indices = energy.topk(count)
+        channel_summary = summarize_channel_energy(energy, top_values, total)
+        groups = summarize_channel_groups(energy, group_size=group_size, top_groups=top_groups)
         modules.append(
             {
                 "name": entry["name"],
@@ -201,10 +220,14 @@ def summarize_stats(stats: dict[str, dict[str, Any]], top_columns: int) -> list[
                 "observationCount": entry["observationCount"],
                 "totalActivationEnergy": total,
                 "meanActivationEnergy": total / max(1, int(energy.numel())),
+                "channelGroupSize": group_size,
+                "channelGroupCount": max(1, (int(energy.numel()) + group_size - 1) // group_size),
+                "channelSummary": channel_summary,
                 "topColumns": [
                     {"index": int(index), "energy": float(value)}
                     for index, value in zip(top_indices.tolist(), top_values.tolist())
                 ],
+                "topGroups": groups,
             }
         )
     return sorted(
@@ -215,6 +238,51 @@ def summarize_stats(stats: dict[str, dict[str, Any]], top_columns: int) -> list[
             item["name"],
         ),
     )
+
+
+def summarize_channel_energy(energy, top_values, total: float) -> dict[str, float]:
+    if int(energy.numel()) == 0 or total <= 0:
+        return {
+            "maxColumnEnergy": 0.0,
+            "topColumnEnergyFraction": 0.0,
+            "topColumnsEnergyFraction": 0.0,
+        }
+
+    max_energy = float(energy.max().item())
+    return {
+        "maxColumnEnergy": max_energy,
+        "topColumnEnergyFraction": max_energy / total,
+        "topColumnsEnergyFraction": float(top_values.sum().item()) / total,
+    }
+
+
+def summarize_channel_groups(energy, group_size: int, top_groups: int) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+    feature_count = int(energy.numel())
+    for start in range(0, feature_count, group_size):
+        end = min(start + group_size, feature_count)
+        values = energy[start:end]
+        total = float(values.sum().item())
+        if int(values.numel()) > 0:
+            local_top_value, local_top_index = values.max(dim=0)
+            top_column_energy = float(local_top_value.item())
+            top_column_index = start + int(local_top_index.item())
+        else:
+            top_column_energy = 0.0
+            top_column_index = start
+        groups.append(
+            {
+                "groupIndex": len(groups),
+                "startColumn": start,
+                "endColumnExclusive": end,
+                "totalActivationEnergy": total,
+                "meanActivationEnergy": total / max(1, end - start),
+                "topColumnIndex": top_column_index,
+                "topColumnEnergy": top_column_energy,
+            }
+        )
+
+    return sorted(groups, key=lambda item: item["totalActivationEnergy"], reverse=True)[:top_groups]
 
 
 def build_report(
@@ -243,6 +311,8 @@ def build_report(
             "statistic": STATISTIC,
             "elapsedSeconds": round(elapsed_seconds, 6),
             "topColumns": args.top_columns,
+            "groupSize": args.group_size,
+            "topGroups": args.top_groups,
         },
         "targetComponents": TARGET_COMPONENTS,
         "componentSummary": component_summary(modules),

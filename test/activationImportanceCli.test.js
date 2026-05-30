@@ -179,3 +179,63 @@ print(json.dumps({
     }
   ]);
 });
+
+test("activation importance summary reports channel group sensitivity", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+
+import torch
+
+script = Path("tools/conversion/collect-activation-importance.py").resolve()
+spec = importlib.util.spec_from_file_location("collect_activation_importance", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+stats = {
+    "model.layers.6.self_attn.v_proj": {
+        "name": "model.layers.6.self_attn.v_proj",
+        "component": "attentionV",
+        "layerIndex": 6,
+        "observationCount": 12,
+        "energy": torch.tensor([16.0, 4.0, 1.0, 1.0, 8.0, 8.0, 2.0, 0.0]),
+    },
+}
+
+print(json.dumps(module.summarize_stats(stats, top_columns=3, group_size=4, top_groups=2), sort_keys=True))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+
+  const [moduleSummary] = JSON.parse(stdout);
+
+  assert.equal(moduleSummary.channelGroupSize, 4);
+  assert.equal(moduleSummary.channelGroupCount, 2);
+  assert.deepEqual(moduleSummary.channelSummary, {
+    maxColumnEnergy: 16,
+    topColumnEnergyFraction: 0.4,
+    topColumnsEnergyFraction: 0.8
+  });
+  assert.deepEqual(moduleSummary.topGroups, [
+    {
+      endColumnExclusive: 4,
+      groupIndex: 0,
+      meanActivationEnergy: 5.5,
+      startColumn: 0,
+      topColumnEnergy: 16,
+      topColumnIndex: 0,
+      totalActivationEnergy: 22
+    },
+    {
+      endColumnExclusive: 8,
+      groupIndex: 1,
+      meanActivationEnergy: 4.5,
+      startColumn: 4,
+      topColumnEnergy: 8,
+      topColumnIndex: 4,
+      totalActivationEnergy: 18
+    }
+  ]);
+});
