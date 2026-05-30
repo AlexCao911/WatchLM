@@ -1181,6 +1181,118 @@ print(json.dumps({"plan": plan, "audit": audit}, sort_keys=True))
   assert.deepEqual(audit.passes.int4.selectedByComponent, { attentionQKO: 6 });
 });
 
+test("stateful step layer11-12 QK-only attention int4 policy isolates attention-score projections", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+class FakeOp:
+    def __init__(self, name):
+        self.name = name
+
+policy = module.load_mixed_precision_policy(
+    "tools/conversion/mixed-precision-policy-stateful-step-layer11-12-attention-qk-int4.json"
+)
+plan = module.build_mixed_compression_plan(policy)
+audit = module.new_mixed_compression_audit(policy)
+int4_selector = module.make_mixed_precision_op_selector(policy, "int4", audit)
+
+for layer in range(11, 13):
+    assert int4_selector(FakeOp(f"model_layers_{layer}_self_attn_q_proj_weight"))
+    assert int4_selector(FakeOp(f"model_layers_{layer}_self_attn_k_proj_weight"))
+    assert not int4_selector(FakeOp(f"model_layers_{layer}_self_attn_o_proj_weight"))
+    assert not int4_selector(FakeOp(f"model_layers_{layer}_self_attn_v_proj_weight"))
+    assert not int4_selector(FakeOp(f"model_layers_{layer}_mlp_down_proj_weight"))
+
+assert not int4_selector(FakeOp("model_layers_10_self_attn_q_proj_weight"))
+assert not int4_selector(FakeOp("model_layers_13_self_attn_q_proj_weight"))
+print(json.dumps({"plan": plan, "audit": audit}, sort_keys=True))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const result = JSON.parse(stdout);
+  const { plan, audit } = result;
+  const int4Pass = plan.compressionPasses.find((pass) => pass.precision === "int4");
+
+  assert.equal(plan.policyId, "stateful-step-layer11-12-attention-qk-int4-rest-fp16");
+  for (const layer of ["11", "12"]) {
+    assert.equal(plan.layerPrecision[layer].attentionQKO, "int4");
+    assert.equal(plan.layerPrecision[layer].attentionV, "fp16");
+    assert.equal(plan.layerPrecision[layer].ffn, "fp16");
+  }
+  assert.deepEqual(int4Pass.opNamePatterns, [
+    "attention.wk",
+    "attention.wq",
+    "self_attn.k_proj",
+    "self_attn.q_proj"
+  ]);
+  assert.equal(audit.passes.int4.selectedOpCount, 4);
+  assert.deepEqual(audit.passes.int4.selectedByComponent, { attentionQKO: 4 });
+  assert.deepEqual(audit.passes.int4.selectedByLayer, { 11: 2, 12: 2 });
+});
+
+test("stateful step layer11-12 O-only attention int4 policy isolates output projection", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+class FakeOp:
+    def __init__(self, name):
+        self.name = name
+
+policy = module.load_mixed_precision_policy(
+    "tools/conversion/mixed-precision-policy-stateful-step-layer11-12-attention-o-int4.json"
+)
+plan = module.build_mixed_compression_plan(policy)
+audit = module.new_mixed_compression_audit(policy)
+int4_selector = module.make_mixed_precision_op_selector(policy, "int4", audit)
+
+for layer in range(11, 13):
+    assert not int4_selector(FakeOp(f"model_layers_{layer}_self_attn_q_proj_weight"))
+    assert not int4_selector(FakeOp(f"model_layers_{layer}_self_attn_k_proj_weight"))
+    assert int4_selector(FakeOp(f"model_layers_{layer}_self_attn_o_proj_weight"))
+    assert not int4_selector(FakeOp(f"model_layers_{layer}_self_attn_v_proj_weight"))
+    assert not int4_selector(FakeOp(f"model_layers_{layer}_mlp_down_proj_weight"))
+
+assert not int4_selector(FakeOp("model_layers_10_self_attn_o_proj_weight"))
+assert not int4_selector(FakeOp("model_layers_13_self_attn_o_proj_weight"))
+print(json.dumps({"plan": plan, "audit": audit}, sort_keys=True))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const result = JSON.parse(stdout);
+  const { plan, audit } = result;
+  const int4Pass = plan.compressionPasses.find((pass) => pass.precision === "int4");
+
+  assert.equal(plan.policyId, "stateful-step-layer11-12-attention-o-int4-rest-fp16");
+  for (const layer of ["11", "12"]) {
+    assert.equal(plan.layerPrecision[layer].attentionQKO, "int4");
+    assert.equal(plan.layerPrecision[layer].attentionV, "fp16");
+    assert.equal(plan.layerPrecision[layer].ffn, "fp16");
+  }
+  assert.deepEqual(int4Pass.opNamePatterns, [
+    "attention.wo",
+    "self_attn.o_proj"
+  ]);
+  assert.equal(audit.passes.int4.selectedOpCount, 2);
+  assert.deepEqual(audit.passes.int4.selectedByComponent, { attentionQKO: 2 });
+  assert.deepEqual(audit.passes.int4.selectedByLayer, { 11: 1, 12: 1 });
+});
+
 test("stateful step layer11-12 V-only attention int4 policy isolates value projections", async () => {
   const { stdout } = await execFileAsync(python, ["-c", `
 import importlib.util

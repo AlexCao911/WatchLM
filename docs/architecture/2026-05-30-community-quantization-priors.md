@@ -18,13 +18,32 @@ DS4:
 ```text
 https://github.com/antirez/ds4
 https://huggingface.co/antirez/deepseek-v4-gguf/blob/main/README.md
+https://github.com/antirez/ds4/blob/main/gguf-tools/README.md
+https://github.com/antirez/ds4/blob/main/gguf-tools/imatrix/README.md
+https://github.com/antirez/ds4/blob/main/gguf-tools/imatrix/dataset/README.md
 ```
 
 llama.cpp / GGUF:
 
 ```text
 https://github.com/ggml-org/llama.cpp/blob/master/tools/quantize/README.md
-https://www.mintlify.com/ggml-org/llama.cpp/concepts/quantization
+```
+
+AWQ / PTQ:
+
+```text
+https://huggingface.co/papers/2306.00978
+https://github.com/mit-han-lab/llm-awq
+https://arxiv.org/abs/2210.17323
+https://arxiv.org/abs/2211.10438
+```
+
+Core ML compression:
+
+```text
+https://apple.github.io/coremltools/docs-guides/source/opt-palettization-overview.html
+https://apple.github.io/coremltools/docs-guides/source/opt-palettization-perf.html
+https://apple.github.io/coremltools/docs-guides/source/opt-opt1_3.html
 ```
 
 Community discussions used as lower-confidence priors:
@@ -63,6 +82,20 @@ For DS4, routed experts are a natural target because they dominate size and each
 expert handles only part of the token stream. MiniCPM5-1B is a dense model, so
 there is no equivalent routed-expert bulk target.
 
+DS4 also moved from legacy non-imatrix downloads toward imatrix variants. Its
+imatrix pipeline collects activation statistics with the runtime itself over a
+rendered prompt corpus, then uses those statistics to guide the low-bit routed
+expert quantization. The tracked dataset covers code review, long-context,
+tool-call, multilingual, summarization, extraction, reasoning, and debugging
+prompts.
+
+The WatchLM takeaway is:
+
+```text
+Before another large low-bit sweep, build a representative WatchLM calibration
+set and use runtime logits / activation evidence to rank tensor sensitivity.
+```
+
 ## llama.cpp / GGUF Prior
 
 The llama.cpp ecosystem has converged on mixed recipes rather than uniform
@@ -86,6 +119,49 @@ Post-conversion uncalibrated Core ML palettization is weaker evidence than a
 calibrated per-tensor or per-channel recipe. If a component fails under Core ML
 kmeans int4, do not assume all 4-bit schemes would fail; assume this specific
 post-conversion recipe is unsafe for that component.
+```
+
+llama.cpp's quantizer also exposes per-tensor overrides such as keeping output
+or token embeddings at a different type and applying tensor-name overrides.
+This supports our current architecture choice: policy files should keep
+precision decisions explicit by tensor family and layer, rather than only
+supporting one global int4/int8 knob.
+
+## AWQ / Activation-Aware Prior
+
+AWQ's core prior is that salient weights should be identified from activation
+statistics. It protects behavior through activation-aware scaling and reports
+that a small salient subset can account for much of the quantization error.
+
+For WatchLM this means:
+
+```text
+Weight-only k-means is a useful first probe, but the production path needs a
+calibration loop:
+  prompt set -> collect activations/logit drift -> tensor sensitivity ranking
+  -> mixed precision policy -> Core ML conversion -> Swift benchmark
+```
+
+GPTQ and SmoothQuant point in the same direction from different angles:
+calibration and distribution/outlier handling matter more than arbitrary layer
+selection.
+
+## Core ML Prior
+
+Core ML palettization supports low-bit LUT-backed weights and warns that a
+single per-tensor LUT can introduce high approximation error for large
+matrices. Per-grouped-channel palettization gives multiple LUTs, and
+per-channel scale can help outlier-heavy rows, but local Core ML compilation
+currently blocks the per-channel-scale variant for our graph.
+
+This keeps two tracks open:
+
+```text
+Compiler-compatible path:
+  per-tensor or no-scale grouped-channel Core ML palettization
+
+Research path:
+  PyTorch-side calibrated / activation-aware transform before Core ML export
 ```
 
 ## Mapping To MiniCPM5-1B
@@ -123,6 +199,8 @@ Attention int4:
   layer11 attention-only: passes single-prompt teacher smoke
   layer11-12 grouped-channel no-scale: fails
   layer11-12 Q/K/O-only: fails
+  layer11-12 Q/K-only: passes batch10 cap2 at fp16 parity
+  layer11-12 O-only: passes smoke but regresses batch10 cap2
   layer11-12 V-only: passes
   layer10-13 V-only: passes
   layer8-15 V-only: matches fp16 on batch10 cap2
@@ -184,6 +262,11 @@ The layer8-15 V-only expansion matches fp16 on the batch10 cap2 gate. This is
 useful evidence, but it is not enough for Watch SE deployment because V-only
 compresses too little of the model. The next priority is to find another safe
 ingredient or introduce calibration/importance scoring for larger components.
+
+The QK-vs-O split adds one more clue: layer11-12 QK-only also matches fp16 on
+the current batch10 cap2 gate, while O-only regresses `watch-utility-001`. This
+argues for keeping O protected and treating QK as a small candidate ingredient,
+not as a broad attention recipe.
 
 Parallel to this, WatchLM should plan a calibrated quantization path rather than
 relying only on Core ML post-conversion palettization:

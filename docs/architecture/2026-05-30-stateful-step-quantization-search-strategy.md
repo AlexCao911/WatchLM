@@ -148,6 +148,15 @@ decision:           the adjacent-layer attention failure is primarily in Q/K/O,
                     not in V
 ```
 
+Layer11-12 QK-only versus O-only int4:
+
+```text
+QK-only quality: batch10 cap2 agreement 0.9, matching fp16
+O-only quality:  batch10 cap2 agreement 0.85, regresses watch-utility-001
+prefix:          both have high overlap with fp16, so batch gate is needed
+decision:        QK is a plausible small ingredient; keep O protected
+```
+
 Layer10-13 V-only int4:
 
 ```text
@@ -183,9 +192,10 @@ Protect:
 
 Expand first:
   middle-layer V projections
+  narrowly scoped QK projections after batch-level evidence
 
 Split if drift appears:
-  Q/K-only vs O-only if Q/K/O compression must be recovered
+  keep O separate and protected until calibrated evidence changes this
   activation-aware sensitivity scoring before retrying FFN
 ```
 
@@ -202,9 +212,9 @@ The next work should therefore pivot to evidence-led candidates:
 calibration set + sensitivity scorer
 per-tensor / per-projection error metrics
 V-only expansion as the immediate safe attention subcomponent
+layer8-15 V-only + layer11-12 QK-only as the next local composition check
 combine layer8-15 V-only with another safe compression axis only after an
 equally strong gate exists for that axis
-Q/K-only vs O-only if Q/K/O compression must be recovered
 groupwise or importance-aware int4 before retrying FFN or wider attention
 ```
 

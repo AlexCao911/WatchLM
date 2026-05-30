@@ -38,6 +38,8 @@ DS4:
 
 ```text
 https://huggingface.co/antirez/deepseek-v4-gguf/blob/main/README.md
+https://github.com/antirez/ds4/blob/main/gguf-tools/README.md
+https://github.com/antirez/ds4/blob/main/gguf-tools/imatrix/dataset/README.md
 ```
 
 Related PTQ directions:
@@ -122,6 +124,13 @@ Q/K/O-only: fails at prefix 2 and teacher smoke
 V-only:     passes all tested prefixes and teacher smoke
 ```
 
+Layer11-12 QK-only versus O-only:
+
+```text
+QK-only: matches fp16 batch10 cap2 agreement at 0.9
+O-only:  passes prefix/smoke but drops batch10 cap2 agreement to 0.85
+```
+
 Layer10-13 V-only:
 
 ```text
@@ -155,41 +164,39 @@ That question now has a useful answer: Q/K/O is the sensitive side, while V is
 locally safe across layers 11-12, remains stable across layers 10-13, and
 matches fp16's batch10 cap2 agreement profile across layers 8-15.
 
+The Q/K/O split has now become sharper:
+
+```text
+QK-only can pass the current batch gate.
+O-only can pass the single-prompt gates while still regressing a watch utility
+prompt.
+Q/K/O together still fails early.
+```
+
+The working interpretation is interaction/accumulation, not a simple rule that
+all Q/K/O tensors are unsafe. QK can be explored as a small ingredient; O should
+remain high precision.
+
 ## Next Experiments
 
-1. Combine layer8-15 V-only with another safe axis
+1. Combine layer8-15 V-only with layer11-12 QK-only
 
 Question:
 
 ```text
-Is there another component-level compression axis that preserves fp16 parity
-well enough to combine with V-only?
+Can the two locally safe attention ingredients compose without triggering the
+same interaction failure as Q/K/O?
 ```
 
 Why this is useful:
 
 ```text
-V-only alone is too small to solve the Watch SE memory problem. It is useful as
-a safe ingredient, not as a deployable policy.
+V-only is quality-stable but too small to solve size. QK-only is the first
+additional attention axis with batch parity, but composition must be tested
+before widening.
 ```
 
-2. Q/K-only versus O-only
-
-Question:
-
-```text
-Inside the failed Q/K/O group, is the error coming from attention-score
-formation or output mixing?
-```
-
-Why this is useful:
-
-```text
-This is the next projection-level attribution if we need more attention weight
-savings than V-only can provide.
-```
-
-3. Activation-aware sensitivity scorer
+2. Activation-aware sensitivity scorer
 
 Question:
 
@@ -205,7 +212,7 @@ This turns the search from layer guessing into an AWQ/imatrix-style importance
 measurement loop.
 ```
 
-4. Calibrated PyTorch-side palettization
+3. Calibrated PyTorch-side palettization
 
 Question:
 
@@ -221,7 +228,7 @@ Core ML's docs provide both data-free and calibration-data routes. Our current
 failures are all data-free post-conversion results.
 ```
 
-5. KV cache precision as a separate runtime-state experiment
+4. KV cache precision as a separate runtime-state experiment
 
 Question:
 
@@ -247,5 +254,5 @@ layer8-15 V-only int4
 ```
 
 Layer8-15 V-only now passes the current batch gate at fp16 parity. The next
-work should either find another safe ingredient or build the activation-aware
-sensitivity scorer for larger targets such as FFN.
+small local ingredient is layer11-12 QK-only. The next broad direction should
+be the activation-aware sensitivity scorer for larger targets such as FFN.
