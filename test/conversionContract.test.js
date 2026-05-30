@@ -18,13 +18,15 @@ test("Core ML conversion contract declares source checkpoint and tokenizer ident
   assert.match(contract.tokenizer.sha256, /^[a-f0-9]{64}$/);
 });
 
-test("Core ML conversion contract declares split prefill and decode artifacts", async () => {
+test("Core ML conversion contract declares shared stateful-step artifacts", async () => {
   const contract = await readContract();
 
+  assert.equal(contract.contextVariant, 256);
+  assert.equal(contract.artifacts.graphInterface, "stateful-step-kv");
   assert.match(contract.artifacts.prefillModelPath, /\.mlpackage$/);
   assert.match(contract.artifacts.decodeModelPath, /\.mlpackage$/);
+  assert.equal(contract.artifacts.prefillModelPath, contract.artifacts.decodeModelPath);
   assert.deepEqual(contract.artifacts.entrypoints, ["prefill", "decode"]);
-  assert.ok([256, 512, 1024].includes(contract.contextVariant));
 });
 
 test("Core ML conversion contract has separate SE 2 and SE 3 quantized variants", async () => {
@@ -38,8 +40,10 @@ test("Core ML conversion contract has separate SE 2 and SE 3 quantized variants"
   assert.equal(contract.artifacts.deviceVariants["watch-se-3"].contextVariant, 512);
 
   for (const variant of Object.values(contract.artifacts.deviceVariants)) {
+    assert.equal(variant.graphInterface, "stateful-step-kv");
     assert.match(variant.prefillModelPath, /\.mlpackage$/);
     assert.match(variant.decodeModelPath, /\.mlpackage$/);
+    assert.equal(variant.prefillModelPath, variant.decodeModelPath);
     assert.equal(typeof variant.maxNewTokens, "number");
   }
 });
@@ -47,11 +51,12 @@ test("Core ML conversion contract has separate SE 2 and SE 3 quantized variants"
 test("Core ML conversion contract declares quantization and logits validation evidence", async () => {
   const contract = await readContract();
 
-  assert.equal(contract.quantizationPolicyId, "mixed-int4-ffn-int8-attn-kv");
+  assert.equal(contract.quantizationPolicyId, "stateful-step-kv-int4");
   assert.equal(contract.logitsValidation.teacherModelId, "openbmb/MiniCPM5-1B");
+  assert.equal(contract.logitsValidation.qualityPromotionStatus, "blocked-by-token-agreement");
+  assert.equal(contract.logitsValidation.averageTokenAgreement, 0);
   assert.equal(typeof contract.logitsValidation.summary, "string");
   assert.ok(contract.logitsValidation.summary.length > 0);
-  assert.equal(typeof contract.logitsValidation.maxAbsoluteError, "number");
 });
 
 test("Core ML conversion contract records excluded large artifact paths", async () => {

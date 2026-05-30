@@ -47,6 +47,18 @@ import Testing
     #expect(se3Artifact.tokenizerSHA256 == "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
 }
 
+@Test func statefulStepCandidateManifestSelectsSharedSE2Artifact() throws {
+    let manifest = try loadStatefulStepCandidateManifest()
+    let artifact = try manifest.modelArtifact(for: .watchSE2, requestedContextTokens: nil)
+
+    #expect(manifest.validationErrors.isEmpty)
+    #expect(manifest.runtime.graphSchema.interface == "stateful-step-kv")
+    #expect(artifact.contextVariant == 256)
+    #expect(artifact.deviceProfile == "watch-se-2")
+    #expect(artifact.prefillPath == "Models/MiniCPM5/stateful-step-kv-256-int4.mlpackage")
+    #expect(artifact.decodePath == artifact.prefillPath)
+}
+
 @Test func manifestRuntimeGraphSchemaMatchesExplicitKVCoreMLIO() throws {
     let manifest = try loadSampleManifest()
     let schema = manifest.runtime.graphSchema

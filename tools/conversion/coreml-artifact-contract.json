@@ -12,20 +12,26 @@
     "vocabularyPreserved": true
   },
   "artifacts": {
-    "prefillModelPath": "artifacts/coreml/watch-se-3/prefill-512.mlpackage",
-    "decodeModelPath": "artifacts/coreml/watch-se-3/decode-512.mlpackage",
+    "graphInterface": "stateful-step-kv",
+    "prefillModelPath": "artifacts/coreml/real-minicpm5-stateful-step-kv-256-int4/stateful-step-kv-256-int4.mlpackage",
+    "decodeModelPath": "artifacts/coreml/real-minicpm5-stateful-step-kv-256-int4/stateful-step-kv-256-int4.mlpackage",
     "entrypoints": ["prefill", "decode"],
     "deviceVariants": {
       "watch-se-2": {
         "contextVariant": 256,
-        "prefillModelPath": "artifacts/coreml/watch-se-2/prefill-256.mlpackage",
-        "decodeModelPath": "artifacts/coreml/watch-se-2/decode-256.mlpackage",
+        "graphInterface": "stateful-step-kv",
+        "prefillModelPath": "artifacts/coreml/real-minicpm5-stateful-step-kv-256-int4/stateful-step-kv-256-int4.mlpackage",
+        "decodeModelPath": "artifacts/coreml/real-minicpm5-stateful-step-kv-256-int4/stateful-step-kv-256-int4.mlpackage",
+        "compiledWatchOSModelPath": "artifacts/coreml/compiled-watchos-stateful-step-kv-256-int4/stateful-step-kv-256-int4.mlmodelc",
+        "benchmarkReportPath": "artifacts/benchmarks/stateful-step-kv-256-int4-teacher-smoke.json",
         "maxNewTokens": 64
       },
       "watch-se-3": {
         "contextVariant": 512,
-        "prefillModelPath": "artifacts/coreml/watch-se-3/prefill-512.mlpackage",
-        "decodeModelPath": "artifacts/coreml/watch-se-3/decode-512.mlpackage",
+        "graphInterface": "stateful-step-kv",
+        "prefillModelPath": "artifacts/coreml/watch-se-3/stateful-step-kv-512-int4.mlpackage",
+        "decodeModelPath": "artifacts/coreml/watch-se-3/stateful-step-kv-512-int4.mlpackage",
+        "status": "planned",
         "maxNewTokens": 96
       }
     }
@@ -274,13 +280,14 @@
       "summary": "FFN8...15 preserves context-16 top-1 on the local prompt, compiles for watchOS, and runs through the Swift benchmark chain, but top-10 agreement and logits/KV drift are meaningfully worse than FFN10...13. Treat it as a size-quality frontier point, not the default policy."
     }
   },
-  "contextVariant": 512,
-  "quantizationPolicyId": "mixed-int4-ffn-int8-attn-kv",
+  "contextVariant": 256,
+  "quantizationPolicyId": "stateful-step-kv-int4",
   "logitsValidation": {
     "teacherModelId": "openbmb/MiniCPM5-1B",
-    "maxAbsoluteError": 0.6669921875,
-    "topKAgreement": 10,
-    "summary": "Real prefill-16 int8 Core ML spike matched PyTorch top-1 and top-10 on the local inference prompt; mean absolute error was 0.12139997631311417."
+    "averageTokenAgreement": 0,
+    "qualityPromotionStatus": "blocked-by-token-agreement",
+    "benchmarkReportPath": "artifacts/benchmarks/stateful-step-kv-256-int4-teacher-smoke.json",
+    "summary": "Context-256 stateful-step int4 is the current SE2 deployability candidate because it uses one shared Core ML graph and avoids split model loading, but it is not quality-promoted: teacher smoke token agreement is 0.0."
   },
   "excludedLargeArtifactPaths": [
     "artifacts/**/*.mlpackage",

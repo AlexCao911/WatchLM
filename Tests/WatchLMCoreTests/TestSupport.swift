@@ -6,6 +6,13 @@ func loadSampleManifest() throws -> ModelManifest {
     return try JSONDecoder().decode(ModelManifest.self, from: data)
 }
 
+func loadStatefulStepCandidateManifest() throws -> ModelManifest {
+    let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appending(path: "tools/validation/fixtures/watch-se2-stateful-step-model-manifest.json")
+    let data = try Data(contentsOf: url)
+    return try JSONDecoder().decode(ModelManifest.self, from: data)
+}
+
 func makeTemporaryDirectory() throws -> URL {
     let url = FileManager.default.temporaryDirectory
         .appending(path: "watchlm-\(UUID().uuidString)", directoryHint: .isDirectory)

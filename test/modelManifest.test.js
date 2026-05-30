@@ -28,6 +28,14 @@ const fixturePath = path.join(
   "fixtures",
   "sample-model-manifest.json"
 );
+const statefulStepFixturePath = path.join(
+  __dirname,
+  "..",
+  "tools",
+  "validation",
+  "fixtures",
+  "watch-se2-stateful-step-model-manifest.json"
+);
 const validManifest = JSON.parse(await readFile(fixturePath, "utf8"));
 
 function clone(value) {
@@ -290,6 +298,21 @@ test("selectModelArtifact resolves SE 2 and SE 3 prefill/decode variants", () =>
     decodeSHA256: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     tokenizerSHA256: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
   });
+});
+
+test("stateful-step SE2 fixture selects a shared context256 artifact", async () => {
+  const manifest = JSON.parse(await readFile(statefulStepFixturePath, "utf8"));
+  const result = validateModelManifest(manifest);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+  assert.equal(manifest.runtime.graphSchema.interface, "stateful-step-kv");
+
+  const selected = selectModelArtifact(manifest, "watch-se-2");
+  assert.equal(selected.contextVariant, 256);
+  assert.equal(selected.deviceProfile, "watch-se-2");
+  assert.equal(selected.prefillPath, "Models/MiniCPM5/stateful-step-kv-256-int4.mlpackage");
+  assert.equal(selected.decodePath, selected.prefillPath);
 });
 
 test("assertValidModelManifest throws one combined validation error", () => {
