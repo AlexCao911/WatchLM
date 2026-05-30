@@ -5,6 +5,7 @@ import Foundation
 public enum CoreMLPrefillDecodeGraphInterface: Equatable, Sendable {
     case tokenAndSingleKV
     case logitsAndLayeredKV(layerCount: Int, kvHeads: Int, headDimension: Int)
+    case statefulKV(layerCount: Int, kvHeads: Int, headDimension: Int)
 }
 
 public struct CoreMLPrefillDecodeBundle: Sendable {
@@ -100,7 +101,21 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
         samplingStrategy: TokenSamplingStrategy = .greedy,
         kvCacheUpdateStrategy: KVCacheUpdateStrategy = .slotRing
     ) throws {
-        guard graphSchema.interface == "logits-layered-kv" else {
+        let graphInterface: CoreMLPrefillDecodeGraphInterface
+        switch graphSchema.interface {
+        case "logits-layered-kv":
+            graphInterface = .logitsAndLayeredKV(
+                layerCount: graphSchema.layerCount,
+                kvHeads: graphSchema.kvHeads,
+                headDimension: graphSchema.headDimension
+            )
+        case "stateful-kv":
+            graphInterface = .statefulKV(
+                layerCount: graphSchema.layerCount,
+                kvHeads: graphSchema.kvHeads,
+                headDimension: graphSchema.headDimension
+            )
+        default:
             throw InferenceRuntimeError.invalidInput(message: "Unsupported Core ML graph interface \(graphSchema.interface).")
         }
 
@@ -108,11 +123,7 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
             prefillModelURL: prefillModelURL,
             decodeModelURL: decodeModelURL,
             maxPromptTokens: maxPromptTokens,
-            graphInterface: .logitsAndLayeredKV(
-                layerCount: graphSchema.layerCount,
-                kvHeads: graphSchema.kvHeads,
-                headDimension: graphSchema.headDimension
-            ),
+            graphInterface: graphInterface,
             prefillInputName: graphSchema.prefill.inputIDs,
             prefillPositionInputName: graphSchema.prefill.positionIDs,
             prefillCausalMaskInputName: graphSchema.prefill.causalMask,
@@ -131,6 +142,13 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
             samplingStrategy: samplingStrategy,
             kvCacheUpdateStrategy: kvCacheUpdateStrategy
         )
+    }
+
+    public var requiresSharedStatefulModel: Bool {
+        if case .statefulKV = graphInterface {
+            return true
+        }
+        return false
     }
 
     public static func miniCPMExplicitKV(
@@ -292,6 +310,21 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
                 decodeInputs: [decodeTokenInputName, decodeKVCacheInputName],
                 decodeOutputs: [decodeNextTokenOutputName, decodeKVCacheOutputName]
             )
+        case .statefulKV:
+            return (
+                prefillInputs: [
+                    prefillInputName,
+                    prefillPositionInputName,
+                    prefillCausalMaskInputName
+                ],
+                prefillOutputs: [prefillLogitsOutputName],
+                decodeInputs: [
+                    decodeTokenInputName,
+                    decodePositionInputName,
+                    decodeCausalMaskInputName
+                ],
+                decodeOutputs: [decodeLogitsOutputName]
+            )
         case .logitsAndLayeredKV(let layerCount, _, _):
             var prefillOutputs = [prefillLogitsOutputName]
             var decodeInputs = [
@@ -359,6 +392,25 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
                 decodeOutputs: [
                     decodeNextTokenOutputName: [1],
                     decodeKVCacheOutputName: [1]
+                ]
+            )
+        case .statefulKV:
+            return (
+                prefillInputs: [
+                    prefillInputName: [1, maxPromptTokens],
+                    prefillPositionInputName: [1, maxPromptTokens],
+                    prefillCausalMaskInputName: [1, 1, maxPromptTokens, maxPromptTokens]
+                ],
+                prefillOutputs: [
+                    prefillLogitsOutputName: [1, nil]
+                ],
+                decodeInputs: [
+                    decodeTokenInputName: [1, 1],
+                    decodePositionInputName: [1, 1],
+                    decodeCausalMaskInputName: [1, 1, 1, maxPromptTokens + 1]
+                ],
+                decodeOutputs: [
+                    decodeLogitsOutputName: [1, nil]
                 ]
             )
         case .logitsAndLayeredKV(let layerCount, let kvHeads, let headDimension):
@@ -434,6 +486,26 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
                 decodeOutputs: [
                     decodeNextTokenOutputName: [.double],
                     decodeKVCacheOutputName: [.double]
+                ]
+            )
+        case .statefulKV:
+            let floatingLogits: [MLMultiArrayDataType] = [.float16, .float32, .double]
+            return (
+                prefillInputs: [
+                    prefillInputName: [.int32],
+                    prefillPositionInputName: [.int32],
+                    prefillCausalMaskInputName: [.float16]
+                ],
+                prefillOutputs: [
+                    prefillLogitsOutputName: floatingLogits
+                ],
+                decodeInputs: [
+                    decodeTokenInputName: [.int32],
+                    decodePositionInputName: [.int32],
+                    decodeCausalMaskInputName: [.float16]
+                ],
+                decodeOutputs: [
+                    decodeLogitsOutputName: floatingLogits
                 ]
             )
         case .logitsAndLayeredKV(let layerCount, _, _):

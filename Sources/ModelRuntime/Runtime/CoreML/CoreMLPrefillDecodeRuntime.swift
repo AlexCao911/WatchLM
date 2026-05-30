@@ -85,6 +85,19 @@ public final class CoreMLPrefillDecodeRuntime: StreamingInferenceRuntime, @unche
                 onToken: onToken,
                 shouldCancel: shouldCancel
             )
+        case .statefulKV:
+            guard #available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *) else {
+                throw InferenceRuntimeError.unavailableRuntime(
+                    reason: "Core ML stateful KV requires macOS 15, iOS 18, watchOS 11, tvOS 18, or visionOS 2."
+                )
+            }
+            return try await generateStatefulKV(
+                request: request,
+                promptTokens: promptTokens,
+                models: models,
+                onToken: onToken,
+                shouldCancel: shouldCancel
+            )
         case .logitsAndLayeredKV(let layerCount, _, _):
             return try await generateLogitsAndLayeredKV(
                 request: request,
@@ -194,6 +207,125 @@ public final class CoreMLPrefillDecodeRuntime: StreamingInferenceRuntime, @unche
                 firstTokenMs: prefillMs,
                 decodeStepMs: decodeStepMs
             ),
+            terminationReason: terminationReason
+        )
+    }
+
+    @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+    private func generateStatefulKV(
+        request: InferenceRequest,
+        promptTokens: [Int32],
+        models: LoadedPrefillDecodeModels,
+        onToken: (@Sendable (InferenceToken) -> Void)?,
+        shouldCancel: @Sendable () -> Bool
+    ) async throws -> InferenceResult {
+        guard models.prefill === models.decode else {
+            throw InferenceRuntimeError.unavailableRuntime(
+                reason: "Stateful KV requires prefill and decode to use one shared Core ML model instance."
+            )
+        }
+
+        var inputState = try CoreMLMiniCPMInputState(
+            tokenIDs: promptTokens,
+            capacity: bundle.maxPromptTokens
+        )
+        var emittedTokenIDs: [Int32] = []
+        var emittedText: [String] = []
+        var decodeStepMs: [Double] = []
+        var metrics = InferenceMetrics()
+        var terminationReason = InferenceTerminationReason.maxTokens
+        let stopCriteria = DecodeStopCriteria(
+            maxNewTokens: request.maxNewTokens,
+            eosTokenIDs: tokenizer.endOfSequenceTokenIDs
+        )
+        let logitsSampler = CoreMLLogitsSampler(
+            processor: CoreMLLogitsProcessor(policy: bundle.logitsProcessor),
+            sampler: bundle.samplingStrategy.makeSampler()
+        )
+        let state = models.prefill.makeState()
+
+        let prefillStarted = Date()
+        let prefillInput = try CoreMLDictionaryFeatureProvider(features: [
+            bundle.prefillInputName: MLFeatureValue(multiArray: inputState.inputIDs),
+            bundle.prefillPositionInputName: MLFeatureValue(multiArray: inputState.positionIDs),
+            bundle.prefillCausalMaskInputName: MLFeatureValue(multiArray: inputState.causalMask)
+        ])
+        let prefillOutput = try await statefulPrediction(
+            model: models.prefill,
+            input: prefillInput,
+            state: state
+        )
+        let prefillMs = coreMLElapsedMilliseconds(since: prefillStarted)
+        let prefillLogits = try multiArrayOutput(from: prefillOutput, name: bundle.prefillLogitsOutputName)
+        let prefillSamplingStarted = Date()
+        var nextTokenID = try logitsSampler.selectToken(from: prefillLogits)
+        metrics.prefillSamplingMs = coreMLElapsedMilliseconds(since: prefillSamplingStarted)
+
+        if tokenizer.endOfSequenceTokenIDs.contains(nextTokenID) {
+            terminationReason = .endOfSequence
+        } else {
+            let text = try tokenizer.decode(tokenIDs: [nextTokenID])
+            onToken?(InferenceToken(
+                index: emittedTokenIDs.count,
+                tokenID: nextTokenID,
+                text: text,
+                isFirstToken: emittedTokenIDs.isEmpty
+            ))
+            emittedTokenIDs.append(nextTokenID)
+            emittedText.append(text)
+        }
+
+        while !stopCriteria.shouldStop(generatedTokenIDs: emittedTokenIDs) && terminationReason != .endOfSequence {
+            if shouldCancel() {
+                throw InferenceRuntimeError.cancelled(partialTokens: emittedText)
+            }
+
+            let decodeStarted = Date()
+            let decodeInput = try CoreMLDictionaryFeatureProvider(features: [
+                bundle.decodeTokenInputName: MLFeatureValue(multiArray: try tokenIDArray(nextTokenID)),
+                bundle.decodePositionInputName: MLFeatureValue(multiArray: inputState.decodePositionID),
+                bundle.decodeCausalMaskInputName: MLFeatureValue(multiArray: inputState.decodeCausalMask)
+            ])
+            let decodeOutput = try await statefulPrediction(
+                model: models.decode,
+                input: decodeInput,
+                state: state
+            )
+            decodeStepMs.append(coreMLElapsedMilliseconds(since: decodeStarted))
+            let decodeLogits = try multiArrayOutput(from: decodeOutput, name: bundle.decodeLogitsOutputName)
+            let decodeSamplingStarted = Date()
+            nextTokenID = try logitsSampler.selectToken(
+                from: decodeLogits,
+                generatedTokenIDs: emittedTokenIDs
+            )
+            metrics.decodeSamplingStepMs.append(coreMLElapsedMilliseconds(since: decodeSamplingStarted))
+            inputState.appendGeneratedToken()
+
+            if tokenizer.endOfSequenceTokenIDs.contains(nextTokenID) {
+                terminationReason = .endOfSequence
+                break
+            }
+
+            let text = try tokenizer.decode(tokenIDs: [nextTokenID])
+            onToken?(InferenceToken(
+                index: emittedTokenIDs.count,
+                tokenID: nextTokenID,
+                text: text,
+                isFirstToken: emittedTokenIDs.isEmpty
+            ))
+            emittedTokenIDs.append(nextTokenID)
+            emittedText.append(text)
+        }
+
+        return InferenceResult(
+            tokens: emittedText,
+            generatedTokenIDs: emittedTokenIDs,
+            timing: RuntimeTiming(
+                prefillMs: prefillMs,
+                firstTokenMs: prefillMs,
+                decodeStepMs: decodeStepMs
+            ),
+            metrics: metrics,
             terminationReason: terminationReason
         )
     }
@@ -364,9 +496,21 @@ public final class CoreMLPrefillDecodeRuntime: StreamingInferenceRuntime, @unche
         do {
             let configuration = MLModelConfiguration()
             configuration.computeUnits = .all
+            let prefill = try loadModel(at: bundle.prefillModelURL, configuration: configuration)
+            let decode: MLModel
+            if bundle.requiresSharedStatefulModel {
+                guard bundle.prefillModelURL == bundle.decodeModelURL else {
+                    throw InferenceRuntimeError.invalidInput(
+                        message: "Stateful KV Core ML graph requires prefill and decode model URLs to reference the same shared model."
+                    )
+                }
+                decode = prefill
+            } else {
+                decode = try loadModel(at: bundle.decodeModelURL, configuration: configuration)
+            }
             let models = LoadedPrefillDecodeModels(
-                prefill: try loadModel(at: bundle.prefillModelURL, configuration: configuration),
-                decode: try loadModel(at: bundle.decodeModelURL, configuration: configuration)
+                prefill: prefill,
+                decode: decode
             )
             try bundle.validateModelDescriptions(
                 prefill: models.prefill.modelDescription,
@@ -404,6 +548,17 @@ private func prediction(model: MLModel, input: MLFeatureProvider) async throws -
         #else
         return try model.prediction(from: input)
         #endif
+    } catch let error as InferenceRuntimeError {
+        throw error
+    } catch {
+        throw InferenceRuntimeError.predictionFailed(message: error.localizedDescription)
+    }
+}
+
+@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
+private func statefulPrediction(model: MLModel, input: MLFeatureProvider, state: MLState) async throws -> MLFeatureProvider {
+    do {
+        return try await model.prediction(from: input, using: state)
     } catch let error as InferenceRuntimeError {
         throw error
     } catch {

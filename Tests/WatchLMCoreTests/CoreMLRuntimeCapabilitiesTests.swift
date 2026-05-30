@@ -44,6 +44,11 @@ import Testing
         graphInterface: "logits-layered-kv",
         capabilities: watchOS11
     )
+    let unsupportedStatefulGraph = CoreMLKVCacheRoutePlanner.selectRoute(
+        kvCacheMode: "stateful-preferred",
+        graphInterface: "stateful-kv",
+        capabilities: watchOS10
+    )
 
     #expect(fallback.selectedRoute == .explicitSlotRing)
     #expect(fallback.reason.contains("falling back"))
@@ -51,4 +56,5 @@ import Testing
     #expect(slotRing.selectedRoute == .explicitSlotRing)
     #expect(explicitGraph.selectedRoute == .explicitSlotRing)
     #expect(explicitGraph.reason.contains("exposes explicit KV tensors"))
+    #expect(unsupportedStatefulGraph.selectedRoute == .unsupportedStatefulKV)
 }

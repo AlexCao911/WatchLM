@@ -96,8 +96,8 @@ public struct ModelManifest: Codable, Equatable, Sendable {
     private func validateRuntimeGraphSchema(into errors: inout [String]) {
         let graphSchema = runtime.graphSchema
 
-        if graphSchema.interface != ModelManifestContract.graphInterface {
-            errors.append("runtime.graphSchema.interface must be \(ModelManifestContract.graphInterface)")
+        if !ModelManifestContract.supportedGraphInterfaces.contains(graphSchema.interface) {
+            errors.append("runtime.graphSchema.interface must be logits-layered-kv or stateful-kv")
         }
 
         if graphSchema.layerCount != ModelManifestContract.layers {
@@ -382,7 +382,9 @@ public struct FallbackPolicy: Codable, Equatable, Sendable {
 enum ModelManifestContract {
     static let expectedModelId = "openbmb/MiniCPM5-1B"
     static let expectedRuntime = "coreml-mlprogram"
-    static let graphInterface = "logits-layered-kv"
+    static let explicitKVGraphInterface = "logits-layered-kv"
+    static let statefulKVGraphInterface = "stateful-kv"
+    static let supportedGraphInterfaces = [explicitKVGraphInterface, statefulKVGraphInterface]
     static let supportedKVCacheModes = ["stateful-preferred", "slot-ring", "contiguous-sliding"]
     static let layers = 24
     static let hiddenSize = 1536

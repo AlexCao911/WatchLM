@@ -49,6 +49,9 @@ The Swift runtime now chooses a route from both manifest intent and artifact sha
 kvCacheMode=stateful-preferred + graphInterface=stateful-kv + OS supports MLState
   -> statefulKV
 
+kvCacheMode=stateful-preferred + graphInterface=stateful-kv + OS does not support MLState
+  -> unsupportedStatefulKV
+
 kvCacheMode=stateful-preferred + graphInterface=logits-layered-kv
   -> explicitSlotRing
 
@@ -61,6 +64,9 @@ kvCacheMode=contiguous-sliding
 
 This matters because the memory spike seen in the context-256 int4 run is dominated
 by the explicit Core ML decode graph, not by the raw KV cache byte count.
+
+The unsupported stateful route is rejected during assembly. It must not silently
+fall back to explicit KV, because a stateful graph has no explicit KV tensor IO.
 
 ## Consequence
 

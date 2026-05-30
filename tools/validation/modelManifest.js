@@ -5,6 +5,10 @@ export const SUPPORTED_KV_CACHE_MODES = Object.freeze([
   "slot-ring",
   "contiguous-sliding"
 ]);
+export const SUPPORTED_GRAPH_INTERFACES = Object.freeze([
+  "logits-layered-kv",
+  "stateful-kv"
+]);
 export const EXPECTED_MODEL_ID = "openbmb/MiniCPM5-1B";
 export const EXPECTED_RUNTIME = "coreml-mlprogram";
 export const EXPECTED_GRAPH_SCHEMA = Object.freeze({
@@ -170,7 +174,6 @@ function validateRuntimeGraphSchema(graphSchema, errors) {
   }
 
   for (const [field, expected] of Object.entries({
-    interface: EXPECTED_GRAPH_SCHEMA.interface,
     layerCount: EXPECTED_GRAPH_SCHEMA.layerCount,
     kvHeads: EXPECTED_GRAPH_SCHEMA.kvHeads,
     headDimension: EXPECTED_GRAPH_SCHEMA.headDimension
@@ -178,6 +181,9 @@ function validateRuntimeGraphSchema(graphSchema, errors) {
     if (graphSchema[field] !== expected) {
       errors.push(`runtime.graphSchema.${field} must be ${expected}`);
     }
+  }
+  if (!SUPPORTED_GRAPH_INTERFACES.includes(graphSchema.interface)) {
+    errors.push("runtime.graphSchema.interface must be logits-layered-kv or stateful-kv");
   }
 
   validateNamedSchema("runtime.graphSchema.prefill", graphSchema.prefill, EXPECTED_GRAPH_SCHEMA.prefill, errors);

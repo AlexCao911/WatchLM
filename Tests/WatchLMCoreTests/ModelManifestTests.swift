@@ -71,6 +71,19 @@ import Testing
     #expect(schema.decode.newValuePrefix == "new_value_")
 }
 
+@Test func manifestRuntimeGraphSchemaAcceptsStatefulKVInterface() throws {
+    var manifest = try loadSampleManifest()
+    manifest.runtime.graphSchema.interface = "stateful-kv"
+
+    let watchOS11 = CoreMLRuntimeCapabilities(
+        platform: .watchOS,
+        operatingSystemVersion: OperatingSystemVersion(majorVersion: 11, minorVersion: 0, patchVersion: 0)
+    )
+
+    #expect(manifest.validationErrors.isEmpty)
+    #expect(manifest.runtime.kvCacheRouteDecision(capabilities: watchOS11).selectedRoute == .statefulKV)
+}
+
 #if canImport(CoreML)
 @Test func coreMLBundleCanBeBuiltFromManifestGraphSchema() throws {
     let manifest = try loadSampleManifest()
@@ -173,6 +186,43 @@ import Testing
     #expect(assembly.bundle.kvCacheUpdateStrategy == .contiguousSliding)
     #expect(assembly.kvCacheRouteDecision.selectedRoute == .explicitContiguousSliding)
 }
+
+@Test func coreMLRuntimeAssemblerRejectsStatefulKVWhenRuntimeDoesNotSupportMLState() throws {
+    let assetRoot = try makeTemporaryDirectory()
+    let modelDirectory = assetRoot
+        .appending(path: "Models", directoryHint: .isDirectory)
+        .appending(path: "MiniCPM5", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: modelDirectory, withIntermediateDirectories: true)
+
+    let statefulURL = modelDirectory.appending(path: "stateful-256.mlpackage", directoryHint: .isDirectory)
+    let tokenizerURL = modelDirectory.appending(path: "tokenizer.json")
+    try FileManager.default.createDirectory(at: statefulURL, withIntermediateDirectories: true)
+    try Data("stateful".utf8).write(to: statefulURL.appending(path: "Manifest.json"))
+    try minimalTokenizerJSONData().write(to: tokenizerURL)
+
+    var manifest = try loadSampleManifest()
+    manifest.runtime.graphSchema.interface = "stateful-kv"
+    manifest.asset.variants?["256"]?.prefillPath = "Models/MiniCPM5/stateful-256.mlpackage"
+    manifest.asset.variants?["256"]?.decodePath = "Models/MiniCPM5/stateful-256.mlpackage"
+    manifest.asset.variants?["256"]?.prefillSHA256 = try ArtifactDigest.sha256Hex(for: statefulURL)
+    manifest.asset.variants?["256"]?.decodeSHA256 = try ArtifactDigest.sha256Hex(for: statefulURL)
+    manifest.asset.variants?["256"]?.tokenizerSHA256 = try ArtifactDigest.sha256Hex(for: tokenizerURL)
+
+    do {
+        _ = try CoreMLRuntimeAssembler().assemble(
+            manifest: manifest,
+            deviceProfile: .watchSE2,
+            assetBaseURL: assetRoot,
+            runtimeCapabilities: CoreMLRuntimeCapabilities(
+                platform: .watchOS,
+                operatingSystemVersion: OperatingSystemVersion(majorVersion: 10, minorVersion: 6, patchVersion: 0)
+            )
+        )
+        Issue.record("Expected assembler to reject unsupported stateful KV route")
+    } catch CoreMLRuntimeAssemblyError.unsupportedRuntimeRoute(let decision) {
+        #expect(decision.selectedRoute == .unsupportedStatefulKV)
+    }
+}
 #endif
 
 @Test func reportsManifestContractErrors() throws {
@@ -180,12 +230,14 @@ import Testing
     manifest.model.id = "wrong"
     manifest.runtime.type = "llama.cpp"
     manifest.runtime.kvCacheMode = "copy-everything"
+    manifest.runtime.graphSchema.interface = "next-token"
     manifest.runtime.graphSchema.prefill.logits = "next_token"
     manifest.architecture.layers = 23
 
     #expect(manifest.validationErrors.contains("model.id must be openbmb/MiniCPM5-1B"))
     #expect(manifest.validationErrors.contains("runtime.type must be coreml-mlprogram"))
     #expect(manifest.validationErrors.contains("runtime.kvCacheMode must be stateful-preferred, slot-ring, or contiguous-sliding"))
+    #expect(manifest.validationErrors.contains("runtime.graphSchema.interface must be logits-layered-kv or stateful-kv"))
     #expect(manifest.validationErrors.contains("runtime.graphSchema.prefill.logits must be logits"))
     #expect(manifest.validationErrors.contains("architecture.layers must be 24"))
 }

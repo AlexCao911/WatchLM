@@ -134,12 +134,13 @@ public struct CoreMLRuntimeCapabilities: Codable, Equatable, Sendable {
 
 public enum CoreMLKVCacheRuntimeRoute: String, Codable, Equatable, Sendable {
     case statefulKV
+    case unsupportedStatefulKV
     case explicitSlotRing
     case explicitContiguousSliding
 
     public var explicitUpdateStrategy: KVCacheUpdateStrategy? {
         switch self {
-        case .statefulKV:
+        case .statefulKV, .unsupportedStatefulKV:
             nil
         case .explicitSlotRing:
             .slotRing
@@ -173,6 +174,14 @@ public enum CoreMLKVCacheRoutePlanner {
     ) -> CoreMLKVCacheRouteDecision {
         switch kvCacheMode {
         case "stateful-preferred":
+            if graphInterface == "stateful-kv", !capabilities.supportsStatefulPrediction {
+                return CoreMLKVCacheRouteDecision(
+                    requestedMode: kvCacheMode,
+                    selectedRoute: .unsupportedStatefulKV,
+                    reason: "Artifact graph interface stateful-kv requires Core ML stateful prediction on \(capabilities.platform.rawValue)."
+                )
+            }
+
             if let graphInterface, graphInterface != "stateful-kv" {
                 return CoreMLKVCacheRouteDecision(
                     requestedMode: kvCacheMode,

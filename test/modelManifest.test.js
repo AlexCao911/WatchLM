@@ -10,6 +10,7 @@ import {
   EXPECTED_MODEL_ID,
   EXPECTED_RUNTIME,
   SUPPORTED_CONTEXT_VARIANTS,
+  SUPPORTED_GRAPH_INTERFACES,
   SUPPORTED_KV_CACHE_MODES,
   assertValidModelManifest,
   selectContextVariant,
@@ -48,6 +49,10 @@ test("manifest constants encode the fidelity-first MiniCPM5 contract", () => {
     "stateful-preferred",
     "slot-ring",
     "contiguous-sliding"
+  ]);
+  assert.deepEqual(SUPPORTED_GRAPH_INTERFACES, [
+    "logits-layered-kv",
+    "stateful-kv"
   ]);
   assert.deepEqual(EXPECTED_GRAPH_SCHEMA, {
     interface: "logits-layered-kv",
@@ -103,10 +108,20 @@ test("runtime graph schema must expose logits and layered KV IO names", () => {
   const result = validateModelManifest(manifest);
 
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /runtime\.graphSchema\.interface must be logits-layered-kv/);
+  assert.match(result.errors.join("\n"), /runtime\.graphSchema\.interface must be logits-layered-kv or stateful-kv/);
   assert.match(result.errors.join("\n"), /runtime\.graphSchema\.layerCount must be 24/);
   assert.match(result.errors.join("\n"), /runtime\.graphSchema\.prefill\.logits must be logits/);
   assert.match(result.errors.join("\n"), /runtime\.graphSchema\.decode\.pastKeyPrefix must be past_key_/);
+});
+
+test("runtime graph schema can declare stateful KV graph interface", () => {
+  const manifest = clone(validManifest);
+  manifest.runtime.graphSchema.interface = "stateful-kv";
+
+  const result = validateModelManifest(manifest);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
 });
 
 test("runtime KV cache mode must stay in the explicit Swift update strategy set", () => {

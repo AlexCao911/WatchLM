@@ -549,6 +549,26 @@ import CoreML
     #expect(bundle.decodeNewValueOutputName(forLayer: 3) == "new_value_3")
 }
 
+@Test func coreMLStatefulKVBundleRequiresOnlyTokenAndLogitsIO() throws {
+    var manifest = try loadSampleManifest()
+    manifest.runtime.graphSchema.interface = "stateful-kv"
+    let bundle = try CoreMLPrefillDecodeBundle(
+        prefillModelURL: URL(fileURLWithPath: "/tmp/shared-stateful.mlpackage"),
+        decodeModelURL: URL(fileURLWithPath: "/tmp/shared-stateful.mlpackage"),
+        maxPromptTokens: 16,
+        graphSchema: manifest.runtime.graphSchema
+    )
+
+    #expect(bundle.graphInterface == .statefulKV(layerCount: 24, kvHeads: 2, headDimension: 128))
+
+    try bundle.validateGraphIOContract(
+        prefillInputNames: ["input_ids", "position_ids", "causal_mask"],
+        prefillOutputNames: ["logits"],
+        decodeInputNames: ["token_id", "position_id", "causal_mask"],
+        decodeOutputNames: ["logits"]
+    )
+}
+
 @Test func coreMLPrefillDecodeBundleCarriesLogitsProcessingPolicy() throws {
     let bundle = CoreMLPrefillDecodeBundle(
         prefillModelURL: URL(fileURLWithPath: "/tmp/prefill.mlpackage"),

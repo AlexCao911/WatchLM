@@ -5,6 +5,7 @@ public enum CoreMLRuntimeAssemblyError: Error, Equatable, Sendable {
     case invalidManifest([String])
     case artifactVerificationFailed(ModelArtifactVerificationReport)
     case missingTokenizerPath
+    case unsupportedRuntimeRoute(CoreMLKVCacheRouteDecision)
 }
 
 public struct CoreMLRuntimeAssembly: Sendable {
@@ -76,6 +77,9 @@ public struct CoreMLRuntimeAssembler: Sendable {
         let kvCacheRouteDecision = manifest.runtime.kvCacheRouteDecision(
             capabilities: runtimeCapabilities
         )
+        if kvCacheRouteDecision.selectedRoute == .unsupportedStatefulKV {
+            throw CoreMLRuntimeAssemblyError.unsupportedRuntimeRoute(kvCacheRouteDecision)
+        }
         let bundle = try CoreMLPrefillDecodeBundle(
             prefillModelURL: prefillModelURL,
             decodeModelURL: decodeModelURL,
