@@ -33,8 +33,12 @@ def main() -> None:
     )
     example_inputs = (input_ids, position_ids, causal_mask)
 
-    torch_logits, torch_seconds = run_torch(model, conversion, example_inputs)
-    coreml_logits, coreml_seconds = run_coreml(Path(args.mlpackage).resolve(), example_inputs)
+    torch_logits, torch_seconds = run_torch(model, conversion, example_inputs, args.graph)
+    coreml_logits, coreml_seconds = run_coreml(
+        Path(args.mlpackage).resolve(),
+        example_inputs,
+        compute_units(args.compute_units),
+    )
 
     report = build_report(args, torch_logits, coreml_logits, torch_seconds, coreml_seconds)
     print(json.dumps(report, indent=2))
@@ -48,6 +52,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mlpackage", required=True)
     parser.add_argument("--cache-dir", default=str(ROOT / "artifacts" / "hf" / "MiniCPM5-1B"))
     parser.add_argument("--context-tokens", type=int, default=16)
+    parser.add_argument("--graph", choices=["prefill", "prefill-kv"], default="prefill")
+    parser.add_argument("--compute-units", choices=["all", "cpu"], default="cpu")
     parser.add_argument("--prompt", default="Apple Watch local inference test.")
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument("--report")
@@ -63,18 +69,29 @@ def load_conversion_module():
     return module
 
 
-def run_torch(model: torch.nn.Module, conversion, example_inputs) -> tuple[np.ndarray, float]:
-    wrapper = conversion.MiniCPMPrefillWrapper(model)
+def run_torch(model: torch.nn.Module, conversion, example_inputs, graph: str) -> tuple[np.ndarray, float]:
+    if graph == "prefill-kv":
+        wrapper = conversion.MiniCPMPrefillKVWrapper(model)
+    else:
+        wrapper = conversion.MiniCPMPrefillWrapper(model)
     wrapper.eval()
     started = time.perf_counter()
     with torch.no_grad():
-        logits = wrapper(*example_inputs).detach().cpu().float().numpy()
+        output = wrapper(*example_inputs)
+        logits = output[0] if isinstance(output, tuple) else output
+        logits = logits.detach().cpu().float().numpy()
     return logits, time.perf_counter() - started
 
 
-def run_coreml(mlpackage_path: Path, example_inputs) -> tuple[np.ndarray, float]:
+def compute_units(value: str):
+    if value == "all":
+        return ct.ComputeUnit.ALL
+    return ct.ComputeUnit.CPU_ONLY
+
+
+def run_coreml(mlpackage_path: Path, example_inputs, compute_unit) -> tuple[np.ndarray, float]:
     input_ids, position_ids, causal_mask = example_inputs
-    mlmodel = ct.models.MLModel(str(mlpackage_path), compute_units=ct.ComputeUnit.CPU_ONLY)
+    mlmodel = ct.models.MLModel(str(mlpackage_path), compute_units=compute_unit)
     inputs = {
         "input_ids": input_ids.cpu().numpy().astype(np.int32),
         "position_ids": position_ids.cpu().numpy().astype(np.int32),
@@ -101,6 +118,8 @@ def build_report(
 
     return {
         "mlpackage": args.mlpackage,
+        "graph": args.graph,
+        "computeUnits": args.compute_units,
         "contextTokens": args.context_tokens,
         "prompt": args.prompt,
         "torchSeconds": round(torch_seconds, 6),

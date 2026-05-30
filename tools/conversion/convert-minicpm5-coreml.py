@@ -338,8 +338,10 @@ def build_prefill_tensors(
 def build_4d_causal_mask(token_mask: torch.Tensor) -> torch.Tensor:
     context_tokens = token_mask.shape[-1]
     key_is_real = token_mask[:, None, None, :].to(torch.bool)
+    query_is_padding = ~token_mask[:, None, :, None].to(torch.bool)
     causal = torch.tril(torch.ones((context_tokens, context_tokens), dtype=torch.bool))
-    allowed = causal[None, None, :, :] & key_is_real
+    pad_query_self = query_is_padding & torch.eye(context_tokens, dtype=torch.bool)[None, None, :, :]
+    allowed = (causal[None, None, :, :] & key_is_real) | pad_query_self
     blocked = torch.full((1, 1, context_tokens, context_tokens), torch.finfo(torch.float16).min)
     return torch.where(allowed, torch.zeros_like(blocked), blocked).to(torch.float16)
 

@@ -46,7 +46,8 @@ struct CoreMLMiniCPMInputState {
 
         for queryIndex in 0..<capacity {
             for keyIndex in 0..<capacity {
-                let allowed = keyIndex <= queryIndex && tokenMask[keyIndex]
+                let padQuerySelf = !tokenMask[queryIndex] && keyIndex == queryIndex
+                let allowed = (keyIndex <= queryIndex && tokenMask[keyIndex]) || padQuerySelf
                 causalMask[[0, 0, queryIndex, keyIndex] as [NSNumber]] = NSNumber(value: allowed ? 0 : -65504)
             }
         }

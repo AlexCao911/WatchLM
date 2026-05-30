@@ -1011,6 +1011,8 @@ import CoreML
     #expect(state.positionIDs[[0, 1] as [NSNumber]].int32Value == 0)
     #expect(state.positionIDs[[0, 2] as [NSNumber]].int32Value == 0)
     #expect(state.positionIDs[[0, 3] as [NSNumber]].int32Value == 1)
+    #expect(state.causalMask[[0, 0, 0, 0] as [NSNumber]].doubleValue == 0)
+    #expect(state.causalMask[[0, 0, 0, 1] as [NSNumber]].doubleValue == -65504)
     #expect(state.causalMask[[0, 0, 3, 2] as [NSNumber]].doubleValue == 0)
     #expect(state.causalMask[[0, 0, 3, 1] as [NSNumber]].doubleValue == -65504)
 }
