@@ -115,6 +115,13 @@ Layer11-12 grouped-channel with per-channel scale:
 status: blocked by local Core ML compiler verification
 ```
 
+Layer11-12 Q/K/O-only versus V-only:
+
+```text
+Q/K/O-only: fails at prefix 2 and teacher smoke
+V-only:     passes all tested prefixes and teacher smoke
+```
+
 ## Updated Interpretation
 
 The layer11-12 attention failure is no longer best explained as:
@@ -124,44 +131,47 @@ The layer11-12 attention failure is no longer best explained as:
 ```
 
 The grouped-channel no-scale result still collapses at prefix 2. That means the
-next high-value question is projection attribution:
+next high-value question was projection attribution:
 
 ```text
 Which subprojection actually causes the adjacent-layer failure?
 ```
 
-This is a narrower and more useful question than testing another layer window.
+That question now has a useful answer: Q/K/O is the sensitive side, while V is
+locally safe across layers 11-12.
 
 ## Next Experiments
 
-1. Q/K/O-only layer11-12 int4
+1. V-only layer10-13 int4
 
 Question:
 
 ```text
-Can we compress query/key/output projections across adjacent middle layers while
-leaving V in fp16?
+Can the safe V-only axis expand from layer11-12 to a slightly wider middle
+window?
 ```
 
 Why this is useful:
 
 ```text
-It separates attention-score and output-mixing error from value-state error.
+It is the first attention subcomponent with direct positive evidence across an
+adjacent middle-layer pair.
 ```
 
-2. V-only layer11-12 int4
+2. Q/K-only versus O-only
 
 Question:
 
 ```text
-Does value projection quantization alone cause the prefix-2 collapse?
+Inside the failed Q/K/O group, is the error coming from attention-score
+formation or output mixing?
 ```
 
 Why this is useful:
 
 ```text
-KV/value paths feed the recurrent state. If V-only fails while Q/K/O passes,
-KV-related precision should stay protected longer.
+This is the next projection-level attribution if we need more attention weight
+savings than V-only can provide.
 ```
 
 3. Activation-aware sensitivity scorer
@@ -214,12 +224,13 @@ mixed into static-weight compression conclusions.
 
 ## Current Priority
 
-Run projection attribution before any more layer-window expansion:
+Do not widen whole attention windows. Widen only along the safe V-only axis:
 
 ```text
-layer11-12 Q/K/O-only int4
-layer11-12 V-only int4
+layer10-13 V-only int4
+layer8-15 V-only int4 only if layer10-13 passes
 ```
 
-If both fail, pause attention windowing and build the activation-aware scorer.
-If one passes, use that result to define the next compression boundary.
+If V-only expansion fails, pause attention windowing and build the
+activation-aware scorer. If V-only expansion passes, it becomes the first
+measured attention compression boundary.

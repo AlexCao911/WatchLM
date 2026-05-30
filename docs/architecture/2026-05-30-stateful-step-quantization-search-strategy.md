@@ -139,6 +139,15 @@ prefix:            diverges at prefix 2
 decision:          grouped LUT alone does not fix the adjacent-layer failure
 ```
 
+Layer11-12 Q/K/O-only versus V-only int4:
+
+```text
+Q/K/O-only quality: 0.0 token agreement; diverges at prefix 2
+V-only quality:     1.0 token agreement; top-5 membership matches fp16
+decision:           the adjacent-layer attention failure is primarily in Q/K/O,
+                    not in V
+```
+
 ## Current Intuition
 
 The current Core ML post-conversion kmeans palettization appears much riskier
@@ -174,7 +183,8 @@ The next work should therefore pivot to evidence-led candidates:
 ```text
 calibration set + sensitivity scorer
 per-tensor / per-projection error metrics
-Q/K/O-only vs V-only as the immediate structurally motivated split
+V-only expansion as the immediate safe attention subcomponent
+Q/K-only vs O-only if Q/K/O compression must be recovered
 groupwise or importance-aware int4 before retrying FFN or wider attention
 ```
 
