@@ -128,6 +128,14 @@ Layer10-13 V-only:
 V-only: passes all tested prefixes and teacher smoke
 ```
 
+Layer8-15 V-only:
+
+```text
+V-only: passes teacher smoke
+prefix: high top-5 overlap, with one full-prompt top-5 drift
+batch:  matches fp16 batch10 cap2 token agreement at 0.9
+```
+
 ## Updated Interpretation
 
 The layer11-12 attention failure is no longer best explained as:
@@ -144,24 +152,25 @@ Which subprojection actually causes the adjacent-layer failure?
 ```
 
 That question now has a useful answer: Q/K/O is the sensitive side, while V is
-locally safe across layers 11-12 and remains stable across layers 10-13.
+locally safe across layers 11-12, remains stable across layers 10-13, and
+matches fp16's batch10 cap2 agreement profile across layers 8-15.
 
 ## Next Experiments
 
-1. V-only layer8-15 int4
+1. Combine layer8-15 V-only with another safe axis
 
 Question:
 
 ```text
-Can the safe V-only axis expand from a four-layer middle window to a wider
-middle band?
+Is there another component-level compression axis that preserves fp16 parity
+well enough to combine with V-only?
 ```
 
 Why this is useful:
 
 ```text
-It is the first attention subcomponent with direct positive evidence across
-adjacent middle-layer pairs and a four-layer window.
+V-only alone is too small to solve the Watch SE memory problem. It is useful as
+a safe ingredient, not as a deployable policy.
 ```
 
 2. Q/K-only versus O-only
@@ -237,6 +246,6 @@ layer10-13 V-only int4
 layer8-15 V-only int4
 ```
 
-If V-only expansion fails, pause attention windowing and build the
-activation-aware scorer. If V-only expansion passes, it becomes the first
-measured attention compression boundary.
+Layer8-15 V-only now passes the current batch gate at fp16 parity. The next
+work should either find another safe ingredient or build the activation-aware
+sensitivity scorer for larger targets such as FFN.

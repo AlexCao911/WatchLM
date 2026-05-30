@@ -125,6 +125,7 @@ Attention int4:
   layer11-12 Q/K/O-only: fails
   layer11-12 V-only: passes
   layer10-13 V-only: passes
+  layer8-15 V-only: matches fp16 on batch10 cap2
 ```
 
 ## Updated Search Rules
@@ -178,6 +179,11 @@ collapses at prefix 2. The next expansion should be V-only, not whole attention.
 The layer10-13 V-only expansion also preserves teacher smoke and prefix top-5
 membership. This strengthens V-only as the first attention subcomponent worth
 widening before batch-prompt promotion.
+
+The layer8-15 V-only expansion matches fp16 on the batch10 cap2 gate. This is
+useful evidence, but it is not enough for Watch SE deployment because V-only
+compresses too little of the model. The next priority is to find another safe
+ingredient or introduce calibration/importance scoring for larger components.
 
 Parallel to this, WatchLM should plan a calibrated quantization path rather than
 relying only on Core ML post-conversion palettization:

@@ -156,6 +156,16 @@ prefix:  top-5 membership matches fp16 at every tested prefix
 decision: V-only is stable across a four-layer middle window
 ```
 
+Layer8-15 V-only int4:
+
+```text
+quality: 1.0 token agreement on en-short-001
+prefix:  high top-5 overlap; full prompt overlap is 4/5
+batch:   10-prompt cap2 agreement matches fp16 at 0.9
+decision: V-only is the first attention subcomponent that has batch-level
+          parity with fp16 under the current gate
+```
+
 ## Current Intuition
 
 The current Core ML post-conversion kmeans palettization appears much riskier
@@ -192,7 +202,8 @@ The next work should therefore pivot to evidence-led candidates:
 calibration set + sensitivity scorer
 per-tensor / per-projection error metrics
 V-only expansion as the immediate safe attention subcomponent
-layer8-15 V-only as the next expansion check
+combine layer8-15 V-only with another safe compression axis only after an
+equally strong gate exists for that axis
 Q/K-only vs O-only if Q/K/O compression must be recovered
 groupwise or importance-aware int4 before retrying FFN or wider attention
 ```
