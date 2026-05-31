@@ -147,6 +147,29 @@ print(json.dumps(schema, sort_keys=True))
   assert.deepEqual(schema.states[0].shape, [1, 2, 256, 128]);
 });
 
+test("snapshot download patterns include single-file and sharded safetensors checkpoints", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+print(json.dumps(module.snapshot_allow_patterns()))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+
+  const patterns = JSON.parse(stdout);
+  assert.ok(patterns.includes("model.safetensors"));
+  assert.ok(patterns.includes("model-*.safetensors"));
+  assert.ok(patterns.includes("model.safetensors.index.json"));
+});
+
 test("real MiniCPM conversion CLI describes mixed precision policy without loading the model", async () => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "watchlm-policy-"));
   const policyPath = path.join(tempDir, "mixed-policy.json");

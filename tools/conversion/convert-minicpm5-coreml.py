@@ -398,18 +398,26 @@ def download_snapshot(args: argparse.Namespace) -> Path:
     path = snapshot_download(
         repo_id=args.model_id,
         local_dir=args.cache_dir,
-        allow_patterns=[
-            "config.json",
-            "generation_config.json",
-            "model-*.safetensors",
-            "model.safetensors.index.json",
-            "special_tokens_map.json",
-            "tokenizer.json",
-            "tokenizer_config.json",
-            "chat_template.jinja",
-        ],
+        allow_patterns=snapshot_allow_patterns(),
     )
     return Path(path)
+
+
+def snapshot_allow_patterns() -> list[str]:
+    return [
+        "config.json",
+        "generation_config.json",
+        "model.safetensors",
+        "model-*.safetensors",
+        "model.safetensors.index.json",
+        "pytorch_model.bin",
+        "pytorch_model-*.bin",
+        "pytorch_model.bin.index.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja",
+    ]
 
 
 def load_tokenizer(snapshot_path: Path):
