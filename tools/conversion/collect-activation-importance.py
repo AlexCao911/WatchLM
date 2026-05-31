@@ -16,7 +16,7 @@ CONVERSION_SCRIPT = ROOT / "tools" / "conversion" / "convert-minicpm5-coreml.py"
 DEFAULT_CALIBRATION_PROMPTS = ROOT / "tools" / "benchmark" / "fixtures" / "calibration-prompts.json"
 DEFAULT_CACHE_DIR = ROOT / "artifacts" / "hf" / "MiniCPM5-1B"
 SOURCE_MODEL_ID = "openbmb/MiniCPM5-1B"
-TARGET_COMPONENTS = ["attentionQKO", "attentionV", "ffn", "embedding", "lmHead", "norms"]
+TARGET_COMPONENTS = ["attentionQKO", "attentionV", "ffnGateUp", "ffnDown", "ffn", "embedding", "lmHead", "norms"]
 STATISTIC = "sum_input_activation_squared_by_column"
 
 
@@ -110,8 +110,10 @@ def classify_module_name(name: str) -> str | None:
         return "attentionQKO"
     if "self_attn.v_proj" in name:
         return "attentionV"
-    if any(pattern in name for pattern in ("mlp.gate_proj", "mlp.up_proj", "mlp.down_proj")):
-        return "ffn"
+    if any(pattern in name for pattern in ("mlp.gate_proj", "mlp.up_proj")):
+        return "ffnGateUp"
+    if "mlp.down_proj" in name:
+        return "ffnDown"
     if "feed_forward" in name or re.search(r"(^|\.)ffn(\.|$)", normalized):
         return "ffn"
     return None

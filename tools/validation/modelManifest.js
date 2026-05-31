@@ -56,7 +56,14 @@ const QUANTIZED_WEIGHT_COMPONENTS = Object.freeze([
   "attentionV",
   "ffn"
 ]);
-const TRANSFORMER_WEIGHT_COMPONENTS = Object.freeze(["attentionQKO", "attentionV", "ffn"]);
+const OPTIONAL_QUANTIZED_WEIGHT_COMPONENTS = Object.freeze(["ffnGateUp", "ffnDown"]);
+const TRANSFORMER_WEIGHT_COMPONENTS = Object.freeze([
+  "attentionQKO",
+  "attentionV",
+  "ffnGateUp",
+  "ffnDown",
+  "ffn"
+]);
 
 export function validateModelManifest(manifest) {
   const errors = [];
@@ -407,6 +414,14 @@ function validateQuantization(manifest, errors) {
     if (typeof quantization.weights[component] !== "string") {
       errors.push(`quantization.weights.${component} must be present`);
     } else if (!SUPPORTED_PRECISIONS.includes(quantization.weights[component])) {
+      errors.push(`quantization.weights.${component} must be fp16, int8, or int4`);
+    }
+  }
+  for (const component of OPTIONAL_QUANTIZED_WEIGHT_COMPONENTS) {
+    if (
+      quantization.weights[component] !== undefined &&
+      !SUPPORTED_PRECISIONS.includes(quantization.weights[component])
+    ) {
       errors.push(`quantization.weights.${component} must be fp16, int8, or int4`);
     }
   }

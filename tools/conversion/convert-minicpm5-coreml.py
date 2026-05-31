@@ -28,8 +28,19 @@ SUPPORTED_MIXED_PRECISIONS = {"fp16", "int8", "int4"}
 SUPPORTED_INT4_COMPRESSION_METHODS = {"palettization"}
 SUPPORTED_INT4_PALETTIZATION_MODES = {"kmeans", "uniform"}
 SUPPORTED_INT4_PALETTIZATION_GRANULARITIES = {"per_tensor", "per_grouped_channel"}
-MIXED_POLICY_COMPONENTS = ("embedding", "lmHead", "norms", "attentionQKO", "attentionV", "ffn")
-TRANSFORMER_COMPONENTS = ("attentionQKO", "attentionV", "ffn")
+REQUIRED_MIXED_POLICY_COMPONENTS = ("embedding", "lmHead", "norms", "attentionQKO", "attentionV", "ffn")
+FFN_SUBCOMPONENTS = ("ffnGateUp", "ffnDown")
+MIXED_POLICY_COMPONENTS = (
+    "embedding",
+    "lmHead",
+    "norms",
+    "attentionQKO",
+    "attentionV",
+    "ffnGateUp",
+    "ffnDown",
+    "ffn",
+)
+TRANSFORMER_COMPONENTS = ("attentionQKO", "attentionV", "ffnGateUp", "ffnDown", "ffn")
 STATEFUL_GRAPHS = {"stateful-kv", "stateful-step-kv"}
 DEFAULT_INT4_COMPRESSION = {
     "method": "palettization",
@@ -54,6 +65,8 @@ DEFAULT_OP_NAME_PATTERNS: dict[str, list[str]] = {
         "attention.wo",
     ],
     "attentionV": ["self_attn.v_proj", "attention.wv"],
+    "ffnGateUp": ["mlp.gate_proj", "mlp.up_proj"],
+    "ffnDown": ["mlp.down_proj"],
     "ffn": ["mlp.gate_proj", "mlp.up_proj", "mlp.down_proj", "feed_forward", "ffn"],
 }
 
@@ -726,8 +739,13 @@ def load_mixed_precision_policy(policy_path: str | Path) -> dict[str, Any]:
         raise ValueError("mixed precision policy must include weights")
 
     normalized_weights: dict[str, str] = {}
-    for component in MIXED_POLICY_COMPONENTS:
+    for component in REQUIRED_MIXED_POLICY_COMPONENTS:
         precision = weights.get(component)
+        if precision not in SUPPORTED_MIXED_PRECISIONS:
+            raise ValueError(f"mixed precision policy weights.{component} must be fp16, int8, or int4")
+        normalized_weights[component] = precision
+    for component in FFN_SUBCOMPONENTS:
+        precision = weights.get(component, normalized_weights["ffn"])
         if precision not in SUPPORTED_MIXED_PRECISIONS:
             raise ValueError(f"mixed precision policy weights.{component} must be fp16, int8, or int4")
         normalized_weights[component] = precision
@@ -778,6 +796,10 @@ def load_mixed_precision_policy(policy_path: str | Path) -> dict[str, Any]:
         "opNamePatterns": op_name_patterns,
         "layerOverrides": layer_overrides,
         "int4Compression": int4_compression,
+        "ffnSubcomponentMode": any(
+            component in weights or component in (policy.get("opNamePatterns") or {})
+            for component in FFN_SUBCOMPONENTS
+        ),
     }
 
 
@@ -1071,7 +1093,11 @@ def mixed_precision_op_name_configs(
     metadata = get_weights_metadata(model, weight_threshold=0)
     op_name_configs: dict[str, Any | None] = {}
     for name in sorted(metadata.keys()):
-        component = classify_component_from_op_name(name, policy["opNamePatterns"])
+        component = classify_component_from_op_name(
+            name,
+            policy["opNamePatterns"],
+            ffn_subcomponent_mode=policy.get("ffnSubcomponentMode", False),
+        )
         layer = extract_layer_index(name)
         selected = (
             component is not None
@@ -1089,7 +1115,11 @@ def make_mixed_precision_op_selector(
 ):
     def selector(op) -> bool:
         name = getattr(op, "name", "")
-        component = classify_component_from_op_name(name, policy["opNamePatterns"])
+        component = classify_component_from_op_name(
+            name,
+            policy["opNamePatterns"],
+            ffn_subcomponent_mode=policy.get("ffnSubcomponentMode", False),
+        )
         if component is None:
             record_mixed_compression_audit(audit, target_precision, name, component, None, False)
             return False
@@ -1101,8 +1131,14 @@ def make_mixed_precision_op_selector(
     return selector
 
 
-def classify_component_from_op_name(name: str, op_name_patterns: dict[str, list[str]]) -> str | None:
+def classify_component_from_op_name(
+    name: str,
+    op_name_patterns: dict[str, list[str]],
+    ffn_subcomponent_mode: bool = False,
+) -> str | None:
     for component in MIXED_POLICY_COMPONENTS:
+        if component in FFN_SUBCOMPONENTS and not ffn_subcomponent_mode:
+            continue
         for pattern in op_name_patterns[component]:
             if pattern_matches_name(pattern, name):
                 return component

@@ -461,6 +461,8 @@ public struct QuantizationWeights: Codable, Equatable, Sendable {
     public var norms: String
     public var attentionQKO: String
     public var attentionV: String
+    public var ffnGateUp: String?
+    public var ffnDown: String?
     public var ffn: String
 }
 

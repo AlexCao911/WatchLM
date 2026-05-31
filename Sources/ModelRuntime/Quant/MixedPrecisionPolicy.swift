@@ -19,6 +19,8 @@ public enum MixedPrecisionComponent: String, Codable, Equatable, Sendable {
     case norms
     case attentionQKO
     case attentionV
+    case ffnGateUp
+    case ffnDown
     case ffn
 }
 
@@ -41,6 +43,8 @@ public struct MixedPrecisionPolicy: Codable, Equatable, Sendable {
     public var norms: QuantizedPrecision
     public var attentionQKO: QuantizedPrecision
     public var attentionV: QuantizedPrecision
+    public var ffnGateUp: QuantizedPrecision
+    public var ffnDown: QuantizedPrecision
     public var ffn: QuantizedPrecision
     public var kvCache: QuantizedPrecision
     public var layerOverrides: [MixedPrecisionComponent: [Int: QuantizedPrecision]]
@@ -90,6 +94,8 @@ public struct MixedPrecisionPolicy: Codable, Equatable, Sendable {
         attentionQKO = try Self.parsePrecision(quantization.weights.attentionQKO)
         attentionV = try Self.parsePrecision(quantization.weights.attentionV)
         ffn = try Self.parsePrecision(quantization.weights.ffn)
+        ffnGateUp = try Self.parsePrecision(quantization.weights.ffnGateUp ?? quantization.weights.ffn)
+        ffnDown = try Self.parsePrecision(quantization.weights.ffnDown ?? quantization.weights.ffn)
         self.kvCache = kvCache
         layerOverrides = try Self.parseLayerOverrides(quantization.layerOverrides, layerCount: layerCount)
     }
@@ -118,6 +124,10 @@ public struct MixedPrecisionPolicy: Codable, Equatable, Sendable {
             basePrecision = attentionQKO
         case .attentionV:
             basePrecision = attentionV
+        case .ffnGateUp:
+            basePrecision = ffnGateUp
+        case .ffnDown:
+            basePrecision = ffnDown
         case .ffn:
             basePrecision = ffn
         }
@@ -172,7 +182,7 @@ public struct MixedPrecisionPolicy: Codable, Equatable, Sendable {
 
     private static func supportsLayerOverrides(for component: MixedPrecisionComponent) -> Bool {
         switch component {
-        case .attentionQKO, .attentionV, .ffn:
+        case .attentionQKO, .attentionV, .ffnGateUp, .ffnDown, .ffn:
             true
         case .embedding, .lmHead, .norms:
             false
@@ -181,7 +191,7 @@ public struct MixedPrecisionPolicy: Codable, Equatable, Sendable {
 
     private func isTransformerComponent(_ component: MixedPrecisionComponent) -> Bool {
         switch component {
-        case .attentionQKO, .attentionV, .ffn:
+        case .attentionQKO, .attentionV, .ffnGateUp, .ffnDown, .ffn:
             true
         case .embedding, .lmHead, .norms:
             false

@@ -47,6 +47,8 @@ test("activation importance CLI emits a dry-run report from calibration prompts"
   assert.deepEqual(report.targetComponents, [
     "attentionQKO",
     "attentionV",
+    "ffnGateUp",
+    "ffnDown",
     "ffn",
     "embedding",
     "lmHead",
@@ -93,6 +95,8 @@ spec.loader.exec_module(module)
 names = [
     "model.layers.11.self_attn.q_proj",
     "model.layers.11.self_attn.v_proj",
+    "model.layers.11.mlp.gate_proj",
+    "model.layers.11.mlp.up_proj",
     "model.layers.11.mlp.down_proj",
     "model.embed_tokens",
     "lm_head",
@@ -104,10 +108,12 @@ print(json.dumps([module.classify_module_name(name) for name in names]))
     maxBuffer: 1024 * 1024
   });
 
-  assert.deepEqual(JSON.parse(stdout), [
+assert.deepEqual(JSON.parse(stdout), [
     "attentionQKO",
     "attentionV",
-    "ffn",
+    "ffnGateUp",
+    "ffnGateUp",
+    "ffnDown",
     "embedding",
     "lmHead",
     "norms"

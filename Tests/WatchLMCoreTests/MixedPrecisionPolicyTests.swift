@@ -50,6 +50,28 @@ import Testing
     #expect(policy.precision(for: .ffn, layer: 23) == .int8)
 }
 
+@Test func mixedPrecisionPolicyCanControlFFNSubcomponents() throws {
+    var manifest = try loadSampleManifest()
+    manifest.quantization.weights.ffn = "fp16"
+    manifest.quantization.weights.ffnGateUp = "int8"
+    manifest.quantization.weights.ffnDown = "fp16"
+    manifest.quantization.layerOverrides = [
+        .ffnGateUp: [12: "int4"],
+        .ffnDown: [12: "int8"]
+    ]
+
+    let policy = try MixedPrecisionPolicy(
+        manifest: manifest,
+        protectedEdgeLayerCount: 0
+    )
+
+    #expect(policy.precision(for: .ffn, layer: 12) == .fp16)
+    #expect(policy.precision(for: .ffnGateUp, layer: 12) == .int4)
+    #expect(policy.precision(for: .ffnDown, layer: 12) == .int8)
+    #expect(policy.precision(for: .ffnGateUp, layer: 11) == .int8)
+    #expect(policy.precision(for: .ffnDown, layer: 11) == .fp16)
+}
+
 @Test func mixedPrecisionPolicyConsumesRealImportanceGuidedPolicyFile() throws {
     let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         .appending(path: "tools/conversion/mixed-precision-policy-stateful-step-importance-attention-v-low4-int4.json")

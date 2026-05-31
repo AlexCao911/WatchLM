@@ -287,6 +287,24 @@ test("quantization weight precision must be supported", () => {
   assert.match(result.errors.join("\n"), /quantization\.weights\.attentionV must be fp16, int8, or int4/);
 });
 
+test("quantization policy can declare optional FFN subcomponent precision", () => {
+  const manifest = clone(validManifest);
+  manifest.quantization.weights.ffnGateUp = "int4";
+  manifest.quantization.weights.ffnDown = "int8";
+  manifest.quantization.layerOverrides = {
+    ffnGateUp: {
+      12: "fp16"
+    },
+    ffnDown: {
+      12: "int4"
+    }
+  };
+
+  const result = validateModelManifest(manifest);
+
+  assert.equal(result.ok, true);
+});
+
 test("quantization layer overrides validate transformer components and layer precision", () => {
   const manifest = clone(validManifest);
   manifest.quantization.layerOverrides = {

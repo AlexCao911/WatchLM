@@ -225,7 +225,8 @@ def scored_layer_summary(scored_modules: list[dict[str, Any]]) -> list[dict[str,
 
 
 def effective_precision(policy: dict[str, Any], component: str, layer_index: Any) -> str:
-    precision = (policy.get("weights") or {}).get(component, "fp16")
+    weights = policy.get("weights") or {}
+    precision = weights.get(component, weights.get("ffn", "fp16") if component in {"ffnGateUp", "ffnDown"} else "fp16")
     if layer_index is not None:
         overrides = (policy.get("layerOverrides") or {}).get(component) or {}
         precision = overrides.get(str(layer_index), precision)

@@ -295,6 +295,88 @@ print(json.dumps(audit, sort_keys=True))
   assert.equal(audit.passes.int4.rejectedOpCount, 1);
 });
 
+test("mixed precision policies can split FFN gate/up and down projections", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "watchlm-ffn-split-policy-"));
+  const policyPath = path.join(tempDir, "ffn-split-policy.json");
+  await writeFile(policyPath, JSON.stringify({
+    schemaVersion: 1,
+    policyId: "mixed-split-ffn-gateup-down",
+    strategy: "mixed-precision-fidelity-first",
+    layerCount: 24,
+    protectedEdgeLayerCount: 0,
+    weights: {
+      embedding: "fp16",
+      lmHead: "fp16",
+      norms: "fp16",
+      attentionQKO: "fp16",
+      attentionV: "fp16",
+      ffn: "fp16",
+      ffnGateUp: "int4",
+      ffnDown: "int8"
+    },
+    layerOverrides: {
+      ffnGateUp: {
+        "12": "fp16"
+      },
+      ffnDown: {
+        "12": "int4"
+      }
+    },
+    kvCache: "fp16",
+    structuralReduction: false,
+    opNamePatterns: {
+      ffnGateUp: ["mlp.gate_proj", "mlp.up_proj"],
+      ffnDown: ["mlp.down_proj"]
+    }
+  }), "utf8");
+
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+class FakeOp:
+    def __init__(self, name):
+        self.name = name
+
+policy = module.load_mixed_precision_policy(${JSON.stringify(policyPath)})
+plan = module.build_mixed_compression_plan(policy)
+audit = module.new_mixed_compression_audit(policy)
+int8_selector = module.make_mixed_precision_op_selector(policy, "int8", audit)
+int4_selector = module.make_mixed_precision_op_selector(policy, "int4", audit)
+
+assert int4_selector(FakeOp("model_layers_11_mlp_gate_proj_weight"))
+assert int4_selector(FakeOp("model_layers_11_mlp_up_proj_weight"))
+assert not int4_selector(FakeOp("model_layers_11_mlp_down_proj_weight"))
+assert int8_selector(FakeOp("model_layers_11_mlp_down_proj_weight"))
+assert not int4_selector(FakeOp("model_layers_12_mlp_gate_proj_weight"))
+assert int4_selector(FakeOp("model_layers_12_mlp_down_proj_weight"))
+
+print(json.dumps({"plan": plan, "audit": audit}, sort_keys=True))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const result = JSON.parse(stdout);
+
+  assert.equal(result.plan.policyId, "mixed-split-ffn-gateup-down");
+  assert.equal(result.plan.componentPrecision.ffn, "fp16");
+  assert.equal(result.plan.componentPrecision.ffnGateUp, "int4");
+  assert.equal(result.plan.componentPrecision.ffnDown, "int8");
+  assert.equal(result.plan.layerPrecision["11"].ffnGateUp, "int4");
+  assert.equal(result.plan.layerPrecision["11"].ffnDown, "int8");
+  assert.equal(result.plan.layerPrecision["12"].ffnGateUp, "fp16");
+  assert.equal(result.plan.layerPrecision["12"].ffnDown, "int4");
+  assert.equal(result.audit.passes.int4.selectedByComponent.ffnGateUp, 2);
+  assert.equal(result.audit.passes.int4.selectedByComponent.ffnDown, 1);
+  assert.equal(result.audit.passes.int8.selectedByComponent.ffnDown, 1);
+});
+
 test("mixed precision policies can restrict int4 to explicit layer overrides", async () => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "watchlm-policy-"));
   const policyPath = path.join(tempDir, "ffn12-policy.json");
