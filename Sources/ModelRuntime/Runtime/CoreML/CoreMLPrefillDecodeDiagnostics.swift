@@ -29,10 +29,16 @@ public struct CoreMLPrefillDecodeDiagnosticReport: Codable, Equatable, Sendable 
 public struct CoreMLPrefillDecodeDiagnostics {
     private let bundle: CoreMLPrefillDecodeBundle
     private let tokenizer: any TextTokenizer
+    private let computeUnits: MLComputeUnits
 
-    public init(bundle: CoreMLPrefillDecodeBundle, tokenizer: any TextTokenizer) {
+    public init(
+        bundle: CoreMLPrefillDecodeBundle,
+        tokenizer: any TextTokenizer,
+        computeUnits: MLComputeUnits = .all
+    ) {
         self.bundle = bundle
         self.tokenizer = tokenizer
+        self.computeUnits = computeUnits
     }
 
     public func run(prompt: String, topK: Int = 10) throws -> CoreMLPrefillDecodeDiagnosticReport {
@@ -69,7 +75,7 @@ public struct CoreMLPrefillDecodeDiagnostics {
             capacity: bundle.maxPromptTokens
         )
         let configuration = MLModelConfiguration()
-        configuration.computeUnits = .all
+        configuration.computeUnits = computeUnits
         let prefillModel = try diagnosticLoadModel(at: bundle.prefillModelURL, configuration: configuration)
         let decodeModel = try diagnosticLoadModel(at: bundle.decodeModelURL, configuration: configuration)
         let prefillInput = try CoreMLDictionaryFeatureProvider(features: [
@@ -131,7 +137,7 @@ public struct CoreMLPrefillDecodeDiagnostics {
             capacity: bundle.maxPromptTokens
         )
         let configuration = MLModelConfiguration()
-        configuration.computeUnits = .all
+        configuration.computeUnits = computeUnits
         let model = try diagnosticLoadModel(at: bundle.prefillModelURL, configuration: configuration)
         let state = model.makeState()
         var lastPromptLogits: MLMultiArray?

@@ -198,8 +198,11 @@ import Testing
             "--coreml-layer-count", "28",
             "--coreml-kv-heads", "8",
             "--coreml-head-dim", "128",
+            "--coreml-compute-units", "cpu-only",
+            "--tokenizer-add-bos", "false",
             "--tokenizer-bos-token-id", "151643",
             "--tokenizer-eos-token-ids", "151645",
+            "--chat-template", "qwen3-nonthinking",
             "--context", "256"
         ],
         currentDirectory: root
@@ -208,8 +211,11 @@ import Testing
     #expect(options.coreMLLayerCount == 28)
     #expect(options.coreMLKVHeads == 8)
     #expect(options.coreMLHeadDimension == 128)
+    #expect(options.coreMLComputeUnits == .cpuOnly)
+    #expect(options.tokenizerAddBOS == false)
     #expect(options.tokenizerBOSTokenID == 151643)
     #expect(options.tokenizerEOSTokenIDs == [151645])
+    #expect(options.chatTemplate == .qwen3NonThinking)
 }
 
 @Test func runtimeBenchmarkCommandParsesCoreMLDiagnosticsTopK() throws {

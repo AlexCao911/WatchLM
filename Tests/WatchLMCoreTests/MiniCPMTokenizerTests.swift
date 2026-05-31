@@ -95,10 +95,51 @@ import Testing
     #expect(rendered == expected)
 }
 
+@Test func qwen3ChatTemplateRendersNoThinkFastPath() throws {
+    let template = Qwen3ChatTemplate()
+    let rendered = template.render(
+        messages: [ChatMessage(role: .user, content: "Answer briefly. What is 2+2?")],
+        addGenerationPrompt: true,
+        enableThinking: false
+    )
+
+    let expected = "<|im_start|>user\n" +
+        "Answer briefly. What is 2+2?<|im_end|>\n" +
+        "<|im_start|>assistant\n" +
+        "<think>\n\n</think>\n\n"
+    #expect(rendered == expected)
+}
+
+#if os(macOS)
+@Test func qwen3BytePairTokenizerMatchesHFNoThinkTemplateSmoke() throws {
+    let tokenizer = try MiniCPMBytePairTokenizer(
+        tokenizerJSONURL: localQwen3TokenizerJSONURL(),
+        addBosToken: false,
+        eosTokenIDs: [151645]
+    )
+    let rendered = Qwen3ChatTemplate().render(
+        messages: [ChatMessage(role: .user, content: "Answer briefly. What is 2+2?")],
+        addGenerationPrompt: true,
+        enableThinking: false
+    )
+
+    #expect(try tokenizer.encode(rendered) == [
+        151644, 872, 198, 16141, 26753, 13, 3555, 374,
+        220, 17, 10, 17, 30, 151645, 198, 151644, 77091,
+        198, 151667, 271, 151668, 271
+    ])
+}
+#endif
+
 #if os(macOS)
 private func localMiniCPMTokenizerJSONURL() -> URL {
     URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         .appending(path: "artifacts/hf/MiniCPM5-1B/tokenizer.json")
+}
+
+private func localQwen3TokenizerJSONURL() -> URL {
+    URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appending(path: "artifacts/hf/Qwen3-0.6B/tokenizer.json")
 }
 #endif
 

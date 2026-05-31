@@ -65,6 +65,33 @@ public struct MiniCPMChatTemplate: Sendable {
     }
 }
 
+public struct Qwen3ChatTemplate: Sendable {
+    public init() {}
+
+    public func render(
+        messages: [ChatMessage],
+        addGenerationPrompt: Bool,
+        enableThinking: Bool
+    ) -> String {
+        var rendered = ""
+
+        for message in messages {
+            rendered += "<|im_start|>\(message.role.rawValue)\n"
+            rendered += message.content
+            rendered += "<|im_end|>\n"
+        }
+
+        if addGenerationPrompt {
+            rendered += "<|im_start|>assistant\n"
+            if !enableThinking {
+                rendered += "<think>\n\n</think>\n\n"
+            }
+        }
+
+        return rendered
+    }
+}
+
 public enum MiniCPMTokenizerError: Error, Equatable, Sendable {
     case invalidTokenizerJSON(String)
     case missingToken(String)

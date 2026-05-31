@@ -73,3 +73,6 @@ Attempt a real Qwen3-0.6B Core ML `stateful-step-kv` conversion at context 256.
 If the current generic converter fails, keep the failure evidence in a separate
 Qwen benchmark note and patch only the model-family-specific gap, rather than
 weakening MiniCPM manifest or runtime contracts.
+
+The Qwen-specific runtime contract is now tracked in
+`docs/architecture/2026-05-31-qwen3-runtime-inference-contract.md`.

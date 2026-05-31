@@ -5,12 +5,18 @@ import Foundation
 public final class CoreMLPrefillDecodeRuntime: StreamingInferenceRuntime, @unchecked Sendable {
     private let bundle: CoreMLPrefillDecodeBundle
     private let tokenizer: any TextTokenizer
+    private let computeUnits: MLComputeUnits
     private let lock = NSLock()
     private var loadedModels: LoadedPrefillDecodeModels?
 
-    public init(bundle: CoreMLPrefillDecodeBundle, tokenizer: any TextTokenizer) {
+    public init(
+        bundle: CoreMLPrefillDecodeBundle,
+        tokenizer: any TextTokenizer,
+        computeUnits: MLComputeUnits = .all
+    ) {
         self.bundle = bundle
         self.tokenizer = tokenizer
+        self.computeUnits = computeUnits
     }
 
     public func load() async throws -> RuntimeTiming {
@@ -646,7 +652,7 @@ public final class CoreMLPrefillDecodeRuntime: StreamingInferenceRuntime, @unche
     private func loadModels() throws -> LoadedPrefillDecodeModels {
         do {
             let configuration = MLModelConfiguration()
-            configuration.computeUnits = .all
+            configuration.computeUnits = computeUnits
             let prefill = try loadModel(at: bundle.prefillModelURL, configuration: configuration)
             let decode: MLModel
             if bundle.requiresSharedStatefulModel {

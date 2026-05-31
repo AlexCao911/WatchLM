@@ -22,6 +22,46 @@ public enum CoreMLBenchmarkGraphInterface: String, Codable, Equatable, Sendable 
     case statefulStepKV = "stateful-step-kv"
 }
 
+public enum RuntimeBenchmarkCoreMLComputeUnits: String, Codable, Equatable, Sendable {
+    case all
+    case cpuOnly = "cpu-only"
+    case cpuAndGPU = "cpu-and-gpu"
+    case cpuAndNeuralEngine = "cpu-and-neural-engine"
+
+    #if canImport(CoreML)
+    var coreMLValue: MLComputeUnits {
+        switch self {
+        case .all:
+            return .all
+        case .cpuOnly:
+            return .cpuOnly
+        case .cpuAndGPU:
+            return .cpuAndGPU
+        case .cpuAndNeuralEngine:
+            return .cpuAndNeuralEngine
+        }
+    }
+    #endif
+}
+
+public enum RuntimeBenchmarkChatTemplate: String, Codable, Equatable, Sendable {
+    case raw
+    case qwen3NonThinking = "qwen3-nonthinking"
+
+    func render(userInput: String) -> String {
+        switch self {
+        case .raw:
+            return userInput
+        case .qwen3NonThinking:
+            return Qwen3ChatTemplate().render(
+                messages: [ChatMessage(role: .user, content: userInput)],
+                addGenerationPrompt: true,
+                enableThinking: false
+            )
+        }
+    }
+}
+
 public enum RuntimeBenchmarkCommandError: Error, Equatable, CustomStringConvertible, Sendable {
     case missingOption(String)
     case invalidOption(String)
@@ -169,8 +209,11 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public var coreMLLayerCount: Int
     public var coreMLKVHeads: Int
     public var coreMLHeadDimension: Int
+    public var coreMLComputeUnits: RuntimeBenchmarkCoreMLComputeUnits
+    public var tokenizerAddBOS: Bool
     public var tokenizerBOSTokenID: Int32
     public var tokenizerEOSTokenIDs: Set<Int32>
+    public var chatTemplate: RuntimeBenchmarkChatTemplate
     public var diagnosticsTopK: Int?
     public var diagnosticsPrefixLengths: [Int]?
     public var sensitivityBaselineURL: URL?
@@ -202,8 +245,11 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         coreMLLayerCount: Int = 24,
         coreMLKVHeads: Int = 2,
         coreMLHeadDimension: Int = 128,
+        coreMLComputeUnits: RuntimeBenchmarkCoreMLComputeUnits = .all,
+        tokenizerAddBOS: Bool = true,
         tokenizerBOSTokenID: Int32 = MiniCPMSpecialTokens.bosTokenID,
         tokenizerEOSTokenIDs: Set<Int32> = MiniCPMSpecialTokens.eosTokenIDs,
+        chatTemplate: RuntimeBenchmarkChatTemplate = .raw,
         diagnosticsTopK: Int? = nil,
         diagnosticsPrefixLengths: [Int]? = nil,
         sensitivityBaselineURL: URL? = nil,
@@ -234,8 +280,11 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         self.coreMLLayerCount = coreMLLayerCount
         self.coreMLKVHeads = coreMLKVHeads
         self.coreMLHeadDimension = coreMLHeadDimension
+        self.coreMLComputeUnits = coreMLComputeUnits
+        self.tokenizerAddBOS = tokenizerAddBOS
         self.tokenizerBOSTokenID = tokenizerBOSTokenID
         self.tokenizerEOSTokenIDs = tokenizerEOSTokenIDs
+        self.chatTemplate = chatTemplate
         self.diagnosticsTopK = diagnosticsTopK
         self.diagnosticsPrefixLengths = diagnosticsPrefixLengths
         self.sensitivityBaselineURL = sensitivityBaselineURL
@@ -305,10 +354,20 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
                 values.coreMLKVHeads = try parsePositiveInt(value(after: argument, in: arguments, at: &index), option: argument)
             case "--coreml-head-dim":
                 values.coreMLHeadDimension = try parsePositiveInt(value(after: argument, in: arguments, at: &index), option: argument)
+            case "--coreml-compute-units":
+                values.coreMLComputeUnits = try RuntimeBenchmarkCoreMLComputeUnits(
+                    rawValue: value(after: argument, in: arguments, at: &index)
+                ).orThrowInvalid("\(argument) must be all, cpu-only, cpu-and-gpu, or cpu-and-neural-engine")
+            case "--tokenizer-add-bos":
+                values.tokenizerAddBOS = try parseBool(value(after: argument, in: arguments, at: &index), option: argument)
             case "--tokenizer-bos-token-id":
                 values.tokenizerBOSTokenID = try parseInt32(value(after: argument, in: arguments, at: &index), option: argument)
             case "--tokenizer-eos-token-ids":
                 values.tokenizerEOSTokenIDs = Set(try parseInt32List(value(after: argument, in: arguments, at: &index), option: argument))
+            case "--chat-template":
+                values.chatTemplate = try RuntimeBenchmarkChatTemplate(
+                    rawValue: value(after: argument, in: arguments, at: &index)
+                ).orThrowInvalid("\(argument) must be raw or qwen3-nonthinking")
             case "--diagnostics-top-k":
                 values.diagnosticsTopK = try parsePositiveInt(value(after: argument, in: arguments, at: &index), option: argument)
             case "--diagnostics-prefix-lengths":
@@ -364,8 +423,11 @@ public struct RuntimeBenchmarkCommand: Sendable {
       --coreml-layer-count N
       --coreml-kv-heads N
       --coreml-head-dim N
+      --coreml-compute-units all|cpu-only|cpu-and-gpu|cpu-and-neural-engine
+      --tokenizer-add-bos true|false
       --tokenizer-bos-token-id ID
       --tokenizer-eos-token-ids ID[,ID]
+      --chat-template raw|qwen3-nonthinking
       --diagnostics-top-k N        Run Core ML logits diagnostics instead of generation.
       --diagnostics-prefix-lengths 1,2,4
                                    Run diagnostics on token prefixes.
@@ -409,7 +471,8 @@ public struct RuntimeBenchmarkCommand: Sendable {
         let tokenizer = try makeCoreMLTokenizer()
         let diagnostics = CoreMLPrefillDecodeDiagnostics(
             bundle: try makeCoreMLBundle(),
-            tokenizer: tokenizer
+            tokenizer: tokenizer,
+            computeUnits: options.coreMLComputeUnits.coreMLValue
         )
         let results = try prompts.flatMap { prompt in
             try diagnosticResults(
@@ -559,7 +622,11 @@ public struct RuntimeBenchmarkCommand: Sendable {
                 requireAllPrompts: options.requireAllReferences
             )
         }
-        return suite.prompts
+        return suite.prompts.map { prompt in
+            var renderedPrompt = prompt
+            renderedPrompt.input = options.chatTemplate.render(userInput: prompt.input)
+            return renderedPrompt
+        }
     }
 
     private func loadPromptSuite() throws -> RuntimeBenchmarkPromptSuite {
@@ -630,7 +697,8 @@ public struct RuntimeBenchmarkCommand: Sendable {
 
         return CoreMLPrefillDecodeRuntime(
             bundle: try makeCoreMLBundle(),
-            tokenizer: try makeCoreMLTokenizer()
+            tokenizer: try makeCoreMLTokenizer(),
+            computeUnits: options.coreMLComputeUnits.coreMLValue
         )
         #else
         throw RuntimeBenchmarkCommandError.unsupportedRuntime("Core ML is unavailable on this platform")
@@ -680,7 +748,7 @@ public struct RuntimeBenchmarkCommand: Sendable {
     private func makeCoreMLTokenizer() throws -> any TextTokenizer {
         try MiniCPMBytePairTokenizer(
             tokenizerJSONURL: requiredURL(options.tokenizerURL, "--tokenizer"),
-            addBosToken: true,
+            addBosToken: options.tokenizerAddBOS,
             bosTokenID: options.tokenizerBOSTokenID,
             eosTokenIDs: options.tokenizerEOSTokenIDs
         )
@@ -821,8 +889,11 @@ private struct ParsedBenchmarkArguments {
     var coreMLLayerCount = 24
     var coreMLKVHeads = 2
     var coreMLHeadDimension = 128
+    var coreMLComputeUnits = RuntimeBenchmarkCoreMLComputeUnits.all
+    var tokenizerAddBOS = true
     var tokenizerBOSTokenID = MiniCPMSpecialTokens.bosTokenID
     var tokenizerEOSTokenIDs = MiniCPMSpecialTokens.eosTokenIDs
+    var chatTemplate = RuntimeBenchmarkChatTemplate.raw
     var diagnosticsTopK: Int?
     var diagnosticsPrefixLengths: [Int]?
     var sensitivityBaselineURL: URL?
@@ -869,8 +940,11 @@ private struct ParsedBenchmarkArguments {
             coreMLLayerCount: coreMLLayerCount,
             coreMLKVHeads: coreMLKVHeads,
             coreMLHeadDimension: coreMLHeadDimension,
+            coreMLComputeUnits: coreMLComputeUnits,
+            tokenizerAddBOS: tokenizerAddBOS,
             tokenizerBOSTokenID: tokenizerBOSTokenID,
             tokenizerEOSTokenIDs: tokenizerEOSTokenIDs,
+            chatTemplate: chatTemplate,
             diagnosticsTopK: diagnosticsTopK,
             diagnosticsPrefixLengths: diagnosticsPrefixLengths,
             sensitivityBaselineURL: sensitivityBaselineURL,
@@ -897,6 +971,17 @@ private func parsePositiveInt(_ value: String, option: String) throws -> Int {
         throw RuntimeBenchmarkCommandError.invalidOption("\(option) must be a positive integer")
     }
     return parsed
+}
+
+private func parseBool(_ value: String, option: String) throws -> Bool {
+    switch value.lowercased() {
+    case "true", "yes", "1":
+        return true
+    case "false", "no", "0":
+        return false
+    default:
+        throw RuntimeBenchmarkCommandError.invalidOption("\(option) must be true or false")
+    }
 }
 
 private func parseInt32(_ value: String, option: String) throws -> Int32 {
