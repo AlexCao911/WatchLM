@@ -208,9 +208,11 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public var decodeModelURL: URL?
     public var tokenizerURL: URL?
     public var coreMLGraphInterface: CoreMLBenchmarkGraphInterface
+    public var coreMLGraphSchema: RuntimeGraphSchema?
     public var coreMLLayerCount: Int
     public var coreMLKVHeads: Int
     public var coreMLHeadDimension: Int
+    public var coreMLKVCacheUpdateStrategy: KVCacheUpdateStrategy?
     public var coreMLComputeUnits: RuntimeBenchmarkCoreMLComputeUnits
     public var tokenizerAddBOS: Bool
     public var tokenizerBOSTokenID: Int32
@@ -246,9 +248,11 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         decodeModelURL: URL? = nil,
         tokenizerURL: URL? = nil,
         coreMLGraphInterface: CoreMLBenchmarkGraphInterface = .explicitKV,
+        coreMLGraphSchema: RuntimeGraphSchema? = nil,
         coreMLLayerCount: Int = 24,
         coreMLKVHeads: Int = 2,
         coreMLHeadDimension: Int = 128,
+        coreMLKVCacheUpdateStrategy: KVCacheUpdateStrategy? = nil,
         coreMLComputeUnits: RuntimeBenchmarkCoreMLComputeUnits = .all,
         tokenizerAddBOS: Bool = true,
         tokenizerBOSTokenID: Int32 = MiniCPMSpecialTokens.bosTokenID,
@@ -283,9 +287,11 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         self.decodeModelURL = decodeModelURL
         self.tokenizerURL = tokenizerURL
         self.coreMLGraphInterface = coreMLGraphInterface
+        self.coreMLGraphSchema = coreMLGraphSchema
         self.coreMLLayerCount = coreMLLayerCount
         self.coreMLKVHeads = coreMLKVHeads
         self.coreMLHeadDimension = coreMLHeadDimension
+        self.coreMLKVCacheUpdateStrategy = coreMLKVCacheUpdateStrategy
         self.coreMLComputeUnits = coreMLComputeUnits
         self.tokenizerAddBOS = tokenizerAddBOS
         self.tokenizerBOSTokenID = tokenizerBOSTokenID
@@ -723,6 +729,16 @@ public struct RuntimeBenchmarkCommand: Sendable {
     private func makeCoreMLBundle() throws -> CoreMLPrefillDecodeBundle {
         let prefillURL = try requiredURL(options.prefillModelURL, "--prefill")
         let decodeURL = try resolvedCoreMLDecodeURL(prefillURL: prefillURL)
+        if let graphSchema = options.coreMLGraphSchema {
+            return try CoreMLPrefillDecodeBundle(
+                prefillModelURL: prefillURL,
+                decodeModelURL: decodeURL,
+                maxPromptTokens: options.contextVariant,
+                graphSchema: graphSchema,
+                kvCacheUpdateStrategy: options.coreMLKVCacheUpdateStrategy ?? .slotRing
+            )
+        }
+
         switch options.coreMLGraphInterface {
         case .explicitKV:
             return CoreMLPrefillDecodeBundle.layeredKV(
@@ -905,9 +921,11 @@ private struct ParsedBenchmarkArguments {
     var decodeModelURL: URL?
     var tokenizerURL: URL?
     var coreMLGraphInterface: CoreMLBenchmarkGraphInterface = .explicitKV
+    var coreMLGraphSchema: RuntimeGraphSchema?
     var coreMLLayerCount = 24
     var coreMLKVHeads = 2
     var coreMLHeadDimension = 128
+    var coreMLKVCacheUpdateStrategy: KVCacheUpdateStrategy?
     var coreMLComputeUnits = RuntimeBenchmarkCoreMLComputeUnits.all
     var tokenizerAddBOS = true
     var tokenizerBOSTokenID = MiniCPMSpecialTokens.bosTokenID
@@ -967,9 +985,11 @@ private struct ParsedBenchmarkArguments {
         decodeModelURL = baseURL.appending(path: selectedArtifact.decodePath)
         tokenizerURL = baseURL.appending(path: tokenizerPath)
         coreMLGraphInterface = graphInterface
+        coreMLGraphSchema = graphSchema
         coreMLLayerCount = graphSchema.layerCount
         coreMLKVHeads = graphSchema.kvHeads
         coreMLHeadDimension = graphSchema.headDimension
+        coreMLKVCacheUpdateStrategy = manifest.runtime.kvCacheUpdateStrategy
 
         let tokenizer = manifest.architecture.tokenizer
         tokenizerAddBOS = tokenizer.addBosToken ?? true
@@ -1002,9 +1022,11 @@ private struct ParsedBenchmarkArguments {
             decodeModelURL: decodeModelURL,
             tokenizerURL: tokenizerURL,
             coreMLGraphInterface: coreMLGraphInterface,
+            coreMLGraphSchema: coreMLGraphSchema,
             coreMLLayerCount: coreMLLayerCount,
             coreMLKVHeads: coreMLKVHeads,
             coreMLHeadDimension: coreMLHeadDimension,
+            coreMLKVCacheUpdateStrategy: coreMLKVCacheUpdateStrategy,
             coreMLComputeUnits: coreMLComputeUnits,
             tokenizerAddBOS: tokenizerAddBOS,
             tokenizerBOSTokenID: tokenizerBOSTokenID,
@@ -1099,10 +1121,11 @@ private func requiredURL(_ url: URL?, _ option: String) throws -> URL {
 }
 
 private func byteCount(at url: URL) throws -> Int64 {
-    let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .fileSizeKey])
+    let resolvedURL = url.resolvingSymlinksInPath()
+    let values = try resolvedURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .fileSizeKey])
     if values.isDirectory == true {
         guard let enumerator = FileManager.default.enumerator(
-            at: url,
+            at: resolvedURL,
             includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
             options: [.skipsHiddenFiles]
         ) else {

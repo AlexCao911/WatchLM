@@ -235,7 +235,7 @@ import Testing
 
     #expect(options.runtime == .coreML)
     #expect(options.manifestURL == manifestURL)
-    #expect(options.assetBaseURL == assetBaseURL)
+    #expect(options.assetBaseURL?.standardizedFileURL.path() == assetBaseURL.standardizedFileURL.path())
     #expect(options.sourceModelID == "Qwen/Qwen3-0.6B")
     #expect(options.contextVariant == 256)
     #expect(options.prefillModelURL == assetBaseURL.appending(path: "Models/Qwen3/prefill-kv-256-int8.mlpackage"))
@@ -246,6 +246,42 @@ import Testing
     #expect(options.coreMLKVHeads == 8)
     #expect(options.coreMLHeadDimension == 128)
     #expect(options.coreMLComputeUnits == .cpuOnly)
+    #expect(options.tokenizerAddBOS == false)
+    #expect(options.tokenizerBOSTokenID == 151643)
+    #expect(options.tokenizerEOSTokenIDs == [151645])
+    #expect(options.chatTemplate == .qwen3NonThinking)
+}
+
+@Test func runtimeBenchmarkCommandCanResolveQwenStatefulCoreMLOptionsFromManifest() throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let manifestURL = root.appending(path: "tools/validation/fixtures/qwen3-0.6b-stateful-step-model-manifest.json")
+    let assetBaseURL = root.appending(path: "artifacts/runtime-candidates")
+
+    let options = try RuntimeBenchmarkCommandOptions.parse(
+        [
+            "--manifest", manifestURL.path,
+            "--asset-base", assetBaseURL.path,
+            "--device-profile", "watch-se-2",
+            "--coreml-compute-units", "cpu-only"
+        ],
+        currentDirectory: root
+    )
+
+    #expect(options.runtime == .coreML)
+    #expect(options.assetBaseURL?.standardizedFileURL.path() == assetBaseURL.standardizedFileURL.path())
+    #expect(options.sourceModelID == "Qwen/Qwen3-0.6B")
+    #expect(options.contextVariant == 256)
+    #expect(options.prefillModelURL == assetBaseURL.appending(path: "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage"))
+    #expect(options.decodeModelURL == options.prefillModelURL)
+    #expect(options.tokenizerURL == assetBaseURL.appending(path: "Models/Qwen3/tokenizer.json"))
+    #expect(options.coreMLGraphInterface == .statefulStepKV)
+    #expect(options.coreMLGraphSchema?.interface == "stateful-step-kv")
+    #expect(options.coreMLGraphSchema?.decode.tokenID == "input_ids")
+    #expect(options.coreMLGraphSchema?.decode.positionID == "position_ids")
+    #expect(options.coreMLGraphSchema?.layerCount == 28)
+    #expect(options.coreMLGraphSchema?.kvHeads == 8)
+    #expect(options.coreMLGraphSchema?.headDimension == 128)
+    #expect(options.coreMLKVCacheUpdateStrategy == .slotRing)
     #expect(options.tokenizerAddBOS == false)
     #expect(options.tokenizerBOSTokenID == 151643)
     #expect(options.tokenizerEOSTokenIDs == [151645])

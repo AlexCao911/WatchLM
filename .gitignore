@@ -9,3 +9,4 @@ artifacts/**/*.safetensors
 artifacts/benchmarks/**/*.json
 artifacts/hf/
 artifacts/coreml/
+artifacts/runtime-candidates/

@@ -292,6 +292,54 @@ private func sampleTeacherReferenceSuite() -> RuntimeBenchmarkQualityReferenceSu
     #expect(artifact.totalSizeBytes == 551_308_474)
 }
 
+@Test func runtimeBenchmarkArtifactFollowsSymlinkedManifestAssetsForSize() throws {
+    let assetRoot = try makeTemporaryDirectory()
+    let modelDirectory = assetRoot
+        .appending(path: "Models", directoryHint: .isDirectory)
+        .appending(path: "Qwen3", directoryHint: .isDirectory)
+    let targetDirectory = assetRoot
+        .appending(path: "Targets", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: modelDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
+
+    let targetModelURL = targetDirectory.appending(path: "stateful.mlpackage", directoryHint: .isDirectory)
+    let targetTokenizerURL = targetDirectory.appending(path: "tokenizer.json")
+    let linkedModelURL = modelDirectory.appending(path: "stateful.mlpackage", directoryHint: .isDirectory)
+    let linkedTokenizerURL = modelDirectory.appending(path: "tokenizer.json")
+    let modelData = Data("real-stateful-model".utf8)
+    let tokenizerData = Data("real-tokenizer".utf8)
+    try FileManager.default.createDirectory(at: targetModelURL, withIntermediateDirectories: true)
+    try modelData.write(to: targetModelURL.appending(path: "Manifest.json"))
+    try tokenizerData.write(to: targetTokenizerURL)
+    try FileManager.default.createSymbolicLink(at: linkedModelURL, withDestinationURL: targetModelURL)
+    try FileManager.default.createSymbolicLink(at: linkedTokenizerURL, withDestinationURL: targetTokenizerURL)
+
+    let manifest = try loadQwen3StatefulStepCandidateManifest()
+    let selectedArtifact = SelectedModelArtifact(
+        contextVariant: 256,
+        deviceProfile: "watch-se-2",
+        prefillPath: "Models/Qwen3/stateful.mlpackage",
+        decodePath: "Models/Qwen3/stateful.mlpackage",
+        tokenizerPath: "Models/Qwen3/tokenizer.json",
+        sha256: String(repeating: "0", count: 64),
+        prefillSHA256: nil,
+        decodeSHA256: nil,
+        tokenizerSHA256: nil
+    )
+
+    let artifact = try RuntimeBenchmarkArtifact(
+        selectedArtifact: selectedArtifact,
+        manifest: manifest,
+        assetBaseURL: assetRoot,
+        quantizationPolicyID: "symlink-stateful"
+    )
+
+    #expect(artifact.prefillSizeBytes == Int64(modelData.count))
+    #expect(artifact.decodeSizeBytes == Int64(modelData.count))
+    #expect(artifact.tokenizerSizeBytes == Int64(tokenizerData.count))
+    #expect(artifact.totalSizeBytes == Int64(modelData.count + tokenizerData.count))
+}
+
 @Test func runtimeBenchmarkRunnerCollectsThermalAndMemoryTelemetry() async throws {
     let runtime = MockStreamingRuntime(tokens: ["A"], firstTokenMs: 10, decodeStepMs: [10])
     let telemetryProbe = SequenceRuntimeTelemetryProbe(snapshots: [

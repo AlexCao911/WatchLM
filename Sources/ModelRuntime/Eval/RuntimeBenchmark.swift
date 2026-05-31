@@ -450,9 +450,10 @@ public struct RuntimeBenchmarkArtifact: Codable, Equatable, Sendable {
     }
 
     private static func byteCount(at url: URL) throws -> Int64 {
-        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .fileSizeKey])
+        let resolvedURL = url.resolvingSymlinksInPath()
+        let values = try resolvedURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .fileSizeKey])
         if values.isDirectory == true {
-            return try directoryByteCount(at: url)
+            return try directoryByteCount(at: resolvedURL)
         }
 
         if values.isRegularFile == true {
