@@ -83,8 +83,8 @@ struct CoreMLKVCacheStore {
         for layer in 0..<layerCount {
             let newKey = try multiArrayOutput(from: output, name: keyOutputName(layer))
             let newValue = try multiArrayOutput(from: output, name: valueOutputName(layer))
-            try Self.validate(newKey, featureName: keyOutputName(layer), shape: layout.decodeSliceShape, dataType: dataType)
-            try Self.validate(newValue, featureName: valueOutputName(layer), shape: layout.decodeSliceShape, dataType: dataType)
+            try Self.validateDecodeSlice(newKey, featureName: keyOutputName(layer), shape: layout.decodeSliceShape, storeDataType: dataType)
+            try Self.validateDecodeSlice(newValue, featureName: valueOutputName(layer), shape: layout.decodeSliceShape, storeDataType: dataType)
             try append(newSlice: newKey, to: keys[layer], plan: plan)
             try append(newSlice: newValue, to: values[layer], plan: plan)
         }
@@ -225,6 +225,26 @@ struct CoreMLKVCacheStore {
         guard array.dataType == expectedDataType else {
             throw InferenceRuntimeError.predictionFailed(message: "\(featureName) data type does not match the KV cache store.")
         }
+    }
+
+    private static func validateDecodeSlice(
+        _ array: MLMultiArray,
+        featureName: String,
+        shape expectedShape: [Int],
+        storeDataType: MLMultiArrayDataType
+    ) throws {
+        let shape = array.shape.map(\.intValue)
+        guard shape == expectedShape else {
+            throw InferenceRuntimeError.predictionFailed(message: "\(featureName) shape \(shape) does not match expected KV shape \(expectedShape).")
+        }
+
+        guard array.dataType == storeDataType || (isFloatKVDataType(array.dataType) && isFloatKVDataType(storeDataType)) else {
+            throw InferenceRuntimeError.predictionFailed(message: "\(featureName) data type does not match the KV cache store.")
+        }
+    }
+
+    private static func isFloatKVDataType(_ dataType: MLMultiArrayDataType) -> Bool {
+        dataType == .float16 || dataType == .float32
     }
 
     private static func copy(_ source: MLMultiArray) throws -> MLMultiArray {

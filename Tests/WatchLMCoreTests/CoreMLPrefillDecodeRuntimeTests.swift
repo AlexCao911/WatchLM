@@ -991,6 +991,39 @@ import CoreML
     #expect(cache.layout == KVTensorLayout(batchSize: 1, kvHeads: 1, contextTokens: 3, headDimension: 1))
 }
 
+@Test func coreMLKVCacheStoreCastsFloat32DecodeSlicesIntoFloat16Store() throws {
+    let key = try multiArray(shape: [1, 1, 2, 1], dataType: .float16, values: [10, 11])
+    let value = try multiArray(shape: [1, 1, 2, 1], dataType: .float16, values: [20, 21])
+    let output = FixtureFeatureProvider(features: [
+        "present_key_0": MLFeatureValue(multiArray: key),
+        "present_value_0": MLFeatureValue(multiArray: value)
+    ])
+    var cache = try CoreMLKVCacheStore(
+        prefillOutput: output,
+        layerCount: 1,
+        keyOutputName: { "present_key_\($0)" },
+        valueOutputName: { "present_value_\($0)" }
+    )
+
+    let decodeOutput = FixtureFeatureProvider(features: [
+        "new_key_0": MLFeatureValue(multiArray: try multiArray(shape: [1, 1, 1, 1], dataType: .float32, values: [99])),
+        "new_value_0": MLFeatureValue(multiArray: try multiArray(shape: [1, 1, 1, 1], dataType: .float32, values: [199]))
+    ])
+
+    try cache.appendDecodeOutputs(
+        output: decodeOutput,
+        keyOutputName: { "new_key_\($0)" },
+        valueOutputName: { "new_value_\($0)" }
+    )
+
+    #expect(cache.key(forLayer: 0).dataType == .float16)
+    #expect(cache.value(forLayer: 0).dataType == .float16)
+    #expect(cache.key(forLayer: 0)[0].doubleValue == 11)
+    #expect(cache.key(forLayer: 0)[1].doubleValue == 99)
+    #expect(cache.value(forLayer: 0)[0].doubleValue == 21)
+    #expect(cache.value(forLayer: 0)[1].doubleValue == 199)
+}
+
 @Test func coreMLKVCacheStoreUsesActiveWindowBeforeSlidingFullContext() throws {
     let key = try multiArray(shape: [1, 1, 4, 1], values: [0, 0, 10, 11])
     let value = try multiArray(shape: [1, 1, 4, 1], values: [0, 0, 20, 21])
@@ -1340,10 +1373,14 @@ private final class FixtureFeatureProvider: MLFeatureProvider {
     }
 }
 
-private func multiArray(shape: [Int], values: [Double]) throws -> MLMultiArray {
+private func multiArray(
+    shape: [Int],
+    dataType: MLMultiArrayDataType = .double,
+    values: [Double]
+) throws -> MLMultiArray {
     let array = try MLMultiArray(
         shape: shape.map { NSNumber(value: $0) },
-        dataType: .double
+        dataType: dataType
     )
     for (index, value) in values.enumerated() {
         array[index] = NSNumber(value: value)
