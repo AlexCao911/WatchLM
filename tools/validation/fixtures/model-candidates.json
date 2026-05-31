@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "candidates": [
+    {
+      "id": "minicpm5-1b-v-low8",
+      "sourceModelId": "openbmb/MiniCPM5-1B",
+      "role": "teacher-baseline",
+      "parameterCount": 1000000000,
+      "contextTokens": 256,
+      "tokenizerBytes": 9894271,
+      "measuredArtifactBytes": 2157454606,
+      "measuredPeakRSSBytes": 2186580000,
+      "architecture": {
+        "parameterCount": 1000000000,
+        "layers": 24,
+        "hiddenSize": 1536,
+        "queryHeads": 16,
+        "kvHeads": 2,
+        "headDimension": 128
+      },
+      "quantization": {
+        "weightBits": 16,
+        "kvBytes": 2,
+        "strategy": "attentionV-low8-int4-rest-fp16"
+      },
+      "runtime": {
+        "coreMLLoadMultiplier": 1.0,
+        "temporaryArenaBytes": 0
+      }
+    },
+    {
+      "id": "distilled-watchlm-350m-int4",
+      "sourceModelId": "watchlm/distilled-350m",
+      "role": "runtime-candidate",
+      "parameterCount": 350000000,
+      "contextTokens": 256,
+      "tokenizerBytes": 10000000,
+      "architecture": {
+        "parameterCount": 350000000,
+        "layers": 24,
+        "hiddenSize": 1024,
+        "queryHeads": 16,
+        "kvHeads": 2,
+        "headDimension": 64
+      },
+      "quantization": {
+        "weightBits": 4,
+        "kvBytes": 2,
+        "compressionOverhead": 1.25,
+        "strategy": "distilled-int4-fidelity-first"
+      },
+      "runtime": {
+        "coreMLLoadMultiplier": 1.79,
+        "temporaryArenaBytes": 64000000
+      }
+    },
+    {
+      "id": "distilled-watchlm-600m-int4",
+      "sourceModelId": "watchlm/distilled-600m",
+      "role": "runtime-candidate",
+      "parameterCount": 600000000,
+      "contextTokens": 256,
+      "tokenizerBytes": 10000000,
+      "architecture": {
+        "parameterCount": 600000000,
+        "layers": 24,
+        "hiddenSize": 1280,
+        "queryHeads": 16,
+        "kvHeads": 2,
+        "headDimension": 80
+      },
+      "quantization": {
+        "weightBits": 4,
+        "kvBytes": 2,
+        "compressionOverhead": 1.25,
+        "strategy": "distilled-int4-stretch"
+      },
+      "runtime": {
+        "coreMLLoadMultiplier": 2.2,
+        "temporaryArenaBytes": 76000000
+      }
+    }
+  ]
+}

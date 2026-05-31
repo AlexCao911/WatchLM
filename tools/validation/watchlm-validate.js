@@ -4,6 +4,11 @@ import { readFile } from "node:fs/promises";
 import { loadCalibrationPromptSuite } from "../benchmark/calibrationPrompts.js";
 import { loadBenchmarkPrompts } from "../benchmark/benchmarkPrompts.js";
 import { summarizeBenchmarkReport, validateBenchmarkReport } from "../benchmark/benchmarkReport.js";
+import {
+  assertValidModelCandidateSuite,
+  evaluateModelCandidate,
+  summarizeCandidateEvaluation
+} from "./modelCandidateSizing.js";
 import { assertValidModelManifest, summarizeModelManifest } from "./modelManifest.js";
 
 async function main(argv) {
@@ -21,6 +26,9 @@ async function main(argv) {
       break;
     case "report":
       await validateReportCommand(args);
+      break;
+    case "candidates":
+      await validateCandidatesCommand(args);
       break;
     case "all":
       await validateAllCommand(args);
@@ -85,6 +93,27 @@ async function validateReportCommand(args) {
   console.log(`report ok: ${reports.length} reports, ${passing} passing gates`);
 }
 
+async function validateCandidatesCommand(args) {
+  const [candidatesPath] = args;
+  if (!candidatesPath) {
+    throw new Error("candidates command requires a path");
+  }
+
+  const suite = await readJson(candidatesPath);
+  assertValidModelCandidateSuite(suite);
+  const summaries = suite.candidates
+    .map((candidate) => summarizeCandidateEvaluation(evaluateModelCandidate(candidate, "watch-se-2")));
+  const passing = summaries.filter((summary) => summary.gatePass).length;
+
+  console.log(`candidates ok: ${summaries.length} candidates, ${passing} passing SE2 gate`);
+  for (const summary of summaries) {
+    const status = summary.gatePass ? "pass" : "fail";
+    console.log(
+      `${summary.id}: ${status} artifact=${summary.artifactMB}MB peakRSS=${summary.peakRSSMB}MB role=${summary.role}`
+    );
+  }
+}
+
 async function validateAllCommand(args) {
   const manifestPath = flagValue(args, "--manifest");
   const promptsPath = flagValue(args, "--prompts");
@@ -120,6 +149,7 @@ function usage() {
     "  watchlm-validate prompts <path>",
     "  watchlm-validate calibration-prompts <path>",
     "  watchlm-validate report <path>",
+    "  watchlm-validate candidates <path>",
     "  watchlm-validate all --manifest <path> --prompts <path> --report <path>"
   ].join("\n");
 }

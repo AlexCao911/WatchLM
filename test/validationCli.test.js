@@ -37,6 +37,13 @@ const reportPath = path.join(
   "fixtures",
   "sample-benchmark-report.json"
 );
+const candidatesPath = path.join(
+  repoRoot,
+  "tools",
+  "validation",
+  "fixtures",
+  "model-candidates.json"
+);
 
 function runCli(args) {
   return spawnSync(process.execPath, [cliPath, ...args], {
@@ -71,6 +78,15 @@ test("validates benchmark report fixtures", () => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /report ok/);
+});
+
+test("validates model candidate sizing fixtures", () => {
+  const result = runCli(["candidates", candidatesPath]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /candidates ok: 3 candidates, 1 passing SE2 gate/);
+  assert.match(result.stdout, /distilled-watchlm-350m-int4: pass/);
+  assert.match(result.stdout, /minicpm5-1b-v-low8: fail/);
 });
 
 test("validates all host evidence contracts in one command", () => {
