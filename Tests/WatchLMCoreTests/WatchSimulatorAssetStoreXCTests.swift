@@ -103,20 +103,9 @@ final class WatchSimulatorAssetStoreXCTests: XCTestCase {
             bundle: bundle,
             tokenizer: tokenizer
         )
-        let prompt = Qwen3ChatTemplate().render(
-            messages: [
-                ChatMessage(
-                    role: .user,
-                    content: "Turn this into a concise watch notification: The model asset finished installing and is ready for offline use."
-                )
-            ],
-            addGenerationPrompt: true,
-            enableThinking: false
-        )
-
         let loadTiming = try await runtime.load()
         let result = try await runtime.generate(
-            request: InferenceRequest(prompt: prompt, maxNewTokens: 4),
+            request: InferenceRequest(prompt: qwenWatchUtilityPrompt(), maxNewTokens: 4),
             shouldCancel: { false }
         )
 
@@ -126,6 +115,48 @@ final class WatchSimulatorAssetStoreXCTests: XCTestCase {
         XCTAssertEqual(result.timing.decodeStepMs.count, 3)
         print(
             "WATCHLM_XCTEST_QWEN_REAL_DECODE result=generated tokens=\(result.generatedTokenIDs.map(String.init).joined(separator: ",")) text=\"\(result.text)\" load_ms=\(String(format: "%.3f", loadTiming.loadMs)) first_token_ms=\(String(format: "%.3f", result.timing.firstTokenMs)) decode_tps=\(String(format: "%.2f", result.timing.decodeTokensPerSecond))"
+        )
+        #else
+        throw XCTSkip("Core ML is unavailable in this test environment.")
+        #endif
+    }
+
+    func testQwenInstalledApplicationSupportStatefulStepDecodeSmoke() async throws {
+        #if canImport(CoreML)
+        let rootURL = try ModelAssetStore.defaultRootURL()
+        let store = ModelAssetStore(rootURL: rootURL)
+        guard FileManager.default.fileExists(atPath: store.manifestURL.path) else {
+            throw XCTSkip("Stage Qwen assets into \(rootURL.path) before running the installed Application Support decode gate.")
+        }
+
+        let manifest = try store.loadManifest()
+        let state = store.assetState(
+            for: manifest,
+            deviceProfile: .watchSE2
+        )
+        guard case .installed = state else {
+            XCTFail("Installed Qwen asset store is not ready: \(state)")
+            return
+        }
+
+        let assembly = try CoreMLRuntimeAssembler().assemble(
+            manifest: manifest,
+            deviceProfile: .watchSE2,
+            assetBaseURL: rootURL
+        )
+        let runtime = assembly.makeRuntime()
+        let loadTiming = try await runtime.load()
+        let result = try await runtime.generate(
+            request: InferenceRequest(prompt: qwenWatchUtilityPrompt(), maxNewTokens: 4),
+            shouldCancel: { false }
+        )
+
+        XCTAssertEqual(result.generatedTokenIDs, [785, 1_614, 9_329, 374])
+        XCTAssertEqual(result.text, "The model asset is")
+        XCTAssertEqual(result.terminationReason, .maxTokens)
+        XCTAssertEqual(result.timing.decodeStepMs.count, 3)
+        print(
+            "WATCHLM_XCTEST_QWEN_INSTALLED_DECODE result=generated tokens=\(result.generatedTokenIDs.map(String.init).joined(separator: ",")) text=\"\(result.text)\" root=\"\(rootURL.path)\" load_ms=\(String(format: "%.3f", loadTiming.loadMs)) first_token_ms=\(String(format: "%.3f", result.timing.firstTokenMs)) decode_tps=\(String(format: "%.2f", result.timing.decodeTokensPerSecond))"
         )
         #else
         throw XCTSkip("Core ML is unavailable in this test environment.")
@@ -168,6 +199,19 @@ final class WatchSimulatorAssetStoreXCTests: XCTestCase {
         guard shouldRun else {
             throw XCTSkip("Set \(environmentKey)=1 or create \(sentinelURL.path) to run the \(gateName).")
         }
+    }
+
+    private func qwenWatchUtilityPrompt() -> String {
+        Qwen3ChatTemplate().render(
+            messages: [
+                ChatMessage(
+                    role: .user,
+                    content: "Turn this into a concise watch notification: The model asset finished installing and is ready for offline use."
+                )
+            ],
+            addGenerationPrompt: true,
+            enableThinking: false
+        )
     }
 
     private func repositoryRootURL() -> URL {
