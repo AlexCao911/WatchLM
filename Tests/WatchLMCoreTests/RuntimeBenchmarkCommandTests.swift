@@ -184,6 +184,34 @@ import Testing
     #expect(options.decodeModelURL == nil)
 }
 
+@Test func runtimeBenchmarkCommandParsesRuntimeCandidateGraphDimensionsAndSpecialTokens() throws {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    let modelURL = root.appending(path: "Models/Qwen3/stateful-step-256.mlmodelc")
+    let tokenizerURL = root.appending(path: "Models/Qwen3/tokenizer.json")
+
+    let options = try RuntimeBenchmarkCommandOptions.parse(
+        [
+            "--runtime", "coreml",
+            "--prefill", modelURL.path,
+            "--tokenizer", tokenizerURL.path,
+            "--coreml-graph-interface", "stateful-step-kv",
+            "--coreml-layer-count", "28",
+            "--coreml-kv-heads", "8",
+            "--coreml-head-dim", "128",
+            "--tokenizer-bos-token-id", "151643",
+            "--tokenizer-eos-token-ids", "151645",
+            "--context", "256"
+        ],
+        currentDirectory: root
+    )
+
+    #expect(options.coreMLLayerCount == 28)
+    #expect(options.coreMLKVHeads == 8)
+    #expect(options.coreMLHeadDimension == 128)
+    #expect(options.tokenizerBOSTokenID == 151643)
+    #expect(options.tokenizerEOSTokenIDs == [151645])
+}
+
 @Test func runtimeBenchmarkCommandParsesCoreMLDiagnosticsTopK() throws {
     let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     let modelURL = root.appending(path: "Models/MiniCPM5/stateful-step-256.mlmodelc")

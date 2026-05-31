@@ -72,9 +72,10 @@ public enum MiniCPMTokenizerError: Error, Equatable, Sendable {
 }
 
 public struct MiniCPMBytePairTokenizer: TextTokenizer {
-    public let endOfSequenceTokenIDs = MiniCPMSpecialTokens.eosTokenIDs
+    public let endOfSequenceTokenIDs: Set<Int32>
 
     private let addBosToken: Bool
+    private let bosTokenID: Int32
     private let vocab: [String: Int32]
     private let tokenByID: [Int32: String]
     private let bpeRanks: [String: Int]
@@ -85,12 +86,27 @@ public struct MiniCPMBytePairTokenizer: TextTokenizer {
     private let byteDecoder: [UnicodeScalar: UInt8]
     private let unknownTokenID: Int32?
 
-    public init(tokenizerJSONURL: URL, addBosToken: Bool = true) throws {
+    public init(
+        tokenizerJSONURL: URL,
+        addBosToken: Bool = true,
+        bosTokenID: Int32 = MiniCPMSpecialTokens.bosTokenID,
+        eosTokenIDs: Set<Int32> = MiniCPMSpecialTokens.eosTokenIDs
+    ) throws {
         let data = try Data(contentsOf: tokenizerJSONURL)
-        try self.init(tokenizerJSONData: data, addBosToken: addBosToken)
+        try self.init(
+            tokenizerJSONData: data,
+            addBosToken: addBosToken,
+            bosTokenID: bosTokenID,
+            eosTokenIDs: eosTokenIDs
+        )
     }
 
-    public init(tokenizerJSONData data: Data, addBosToken: Bool = true) throws {
+    public init(
+        tokenizerJSONData data: Data,
+        addBosToken: Bool = true,
+        bosTokenID: Int32 = MiniCPMSpecialTokens.bosTokenID,
+        eosTokenIDs: Set<Int32> = MiniCPMSpecialTokens.eosTokenIDs
+    ) throws {
         let root = try Self.dictionary(from: data)
         guard let model = root["model"] as? [String: Any] else {
             throw MiniCPMTokenizerError.invalidTokenizerJSON("tokenizer.json must include a model object.")
@@ -141,6 +157,8 @@ public struct MiniCPMBytePairTokenizer: TextTokenizer {
 
         let byteCodec = Self.makeByteLevelCodec()
         self.addBosToken = addBosToken
+        self.bosTokenID = bosTokenID
+        endOfSequenceTokenIDs = eosTokenIDs
         self.vocab = vocab
         tokenByID = Dictionary(uniqueKeysWithValues: vocab.map { ($0.value, $0.key) })
         self.bpeRanks = bpeRanks
@@ -160,7 +178,7 @@ public struct MiniCPMBytePairTokenizer: TextTokenizer {
     public func encode(_ text: String) throws -> [Int32] {
         var tokenIDs: [Int32] = []
         if addBosToken {
-            tokenIDs.append(MiniCPMSpecialTokens.bosTokenID)
+            tokenIDs.append(bosTokenID)
         }
 
         for piece in splitAddedTokens(in: text) {

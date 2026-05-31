@@ -16,6 +16,18 @@ import Testing
     #expect(try tokenizer.decode(tokenIDs: [0, 36417, 1782, 22]) == "<s>Hello world!")
 }
 
+@Test func bytePairTokenizerCanUseRuntimeCandidateSpecialTokens() throws {
+    let tokenizer = try MiniCPMBytePairTokenizer(
+        tokenizerJSONURL: localMiniCPMTokenizerJSONURL(),
+        addBosToken: true,
+        bosTokenID: 151643,
+        eosTokenIDs: [151645]
+    )
+
+    #expect(tokenizer.endOfSequenceTokenIDs == [151645])
+    #expect(try tokenizer.encode("Hello world!").first == 151643)
+}
+
 @Test func miniCPMBytePairTokenizerEncodesRenderedNoThinkTemplate() throws {
     let template = MiniCPMChatTemplate(bosToken: "<s>")
     let rendered = template.render(

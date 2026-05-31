@@ -166,6 +166,11 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public var decodeModelURL: URL?
     public var tokenizerURL: URL?
     public var coreMLGraphInterface: CoreMLBenchmarkGraphInterface
+    public var coreMLLayerCount: Int
+    public var coreMLKVHeads: Int
+    public var coreMLHeadDimension: Int
+    public var tokenizerBOSTokenID: Int32
+    public var tokenizerEOSTokenIDs: Set<Int32>
     public var diagnosticsTopK: Int?
     public var diagnosticsPrefixLengths: [Int]?
     public var sensitivityBaselineURL: URL?
@@ -194,6 +199,11 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         decodeModelURL: URL? = nil,
         tokenizerURL: URL? = nil,
         coreMLGraphInterface: CoreMLBenchmarkGraphInterface = .explicitKV,
+        coreMLLayerCount: Int = 24,
+        coreMLKVHeads: Int = 2,
+        coreMLHeadDimension: Int = 128,
+        tokenizerBOSTokenID: Int32 = MiniCPMSpecialTokens.bosTokenID,
+        tokenizerEOSTokenIDs: Set<Int32> = MiniCPMSpecialTokens.eosTokenIDs,
         diagnosticsTopK: Int? = nil,
         diagnosticsPrefixLengths: [Int]? = nil,
         sensitivityBaselineURL: URL? = nil,
@@ -221,6 +231,11 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         self.decodeModelURL = decodeModelURL
         self.tokenizerURL = tokenizerURL
         self.coreMLGraphInterface = coreMLGraphInterface
+        self.coreMLLayerCount = coreMLLayerCount
+        self.coreMLKVHeads = coreMLKVHeads
+        self.coreMLHeadDimension = coreMLHeadDimension
+        self.tokenizerBOSTokenID = tokenizerBOSTokenID
+        self.tokenizerEOSTokenIDs = tokenizerEOSTokenIDs
         self.diagnosticsTopK = diagnosticsTopK
         self.diagnosticsPrefixLengths = diagnosticsPrefixLengths
         self.sensitivityBaselineURL = sensitivityBaselineURL
@@ -284,6 +299,16 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
                 values.coreMLGraphInterface = try CoreMLBenchmarkGraphInterface(
                     rawValue: value(after: argument, in: arguments, at: &index)
                 ).orThrowInvalid("\(argument) must be logits-layered-kv, stateful-kv, or stateful-step-kv")
+            case "--coreml-layer-count":
+                values.coreMLLayerCount = try parsePositiveInt(value(after: argument, in: arguments, at: &index), option: argument)
+            case "--coreml-kv-heads":
+                values.coreMLKVHeads = try parsePositiveInt(value(after: argument, in: arguments, at: &index), option: argument)
+            case "--coreml-head-dim":
+                values.coreMLHeadDimension = try parsePositiveInt(value(after: argument, in: arguments, at: &index), option: argument)
+            case "--tokenizer-bos-token-id":
+                values.tokenizerBOSTokenID = try parseInt32(value(after: argument, in: arguments, at: &index), option: argument)
+            case "--tokenizer-eos-token-ids":
+                values.tokenizerEOSTokenIDs = Set(try parseInt32List(value(after: argument, in: arguments, at: &index), option: argument))
             case "--diagnostics-top-k":
                 values.diagnosticsTopK = try parsePositiveInt(value(after: argument, in: arguments, at: &index), option: argument)
             case "--diagnostics-prefix-lengths":
@@ -336,6 +361,11 @@ public struct RuntimeBenchmarkCommand: Sendable {
       --policy-id ID
       --id ID
       --coreml-graph-interface logits-layered-kv|stateful-kv|stateful-step-kv
+      --coreml-layer-count N
+      --coreml-kv-heads N
+      --coreml-head-dim N
+      --tokenizer-bos-token-id ID
+      --tokenizer-eos-token-ids ID[,ID]
       --diagnostics-top-k N        Run Core ML logits diagnostics instead of generation.
       --diagnostics-prefix-lengths 1,2,4
                                    Run diagnostics on token prefixes.
@@ -623,7 +653,11 @@ public struct RuntimeBenchmarkCommand: Sendable {
                 prefillModelURL: prefillURL,
                 decodeModelURL: decodeURL,
                 maxPromptTokens: options.contextVariant,
-                graphInterface: .statefulKV(layerCount: 24, kvHeads: 2, headDimension: 128),
+                graphInterface: .statefulKV(
+                    layerCount: options.coreMLLayerCount,
+                    kvHeads: options.coreMLKVHeads,
+                    headDimension: options.coreMLHeadDimension
+                ),
                 decodeTokenInputName: "input_ids",
                 decodePositionInputName: "position_ids"
             )
@@ -632,7 +666,11 @@ public struct RuntimeBenchmarkCommand: Sendable {
                 prefillModelURL: prefillURL,
                 decodeModelURL: decodeURL,
                 maxPromptTokens: options.contextVariant,
-                graphInterface: .statefulStepKV(layerCount: 24, kvHeads: 2, headDimension: 128),
+                graphInterface: .statefulStepKV(
+                    layerCount: options.coreMLLayerCount,
+                    kvHeads: options.coreMLKVHeads,
+                    headDimension: options.coreMLHeadDimension
+                ),
                 decodeTokenInputName: "input_ids",
                 decodePositionInputName: "position_ids"
             )
@@ -642,7 +680,9 @@ public struct RuntimeBenchmarkCommand: Sendable {
     private func makeCoreMLTokenizer() throws -> any TextTokenizer {
         try MiniCPMBytePairTokenizer(
             tokenizerJSONURL: requiredURL(options.tokenizerURL, "--tokenizer"),
-            addBosToken: true
+            addBosToken: true,
+            bosTokenID: options.tokenizerBOSTokenID,
+            eosTokenIDs: options.tokenizerEOSTokenIDs
         )
     }
 
@@ -778,6 +818,11 @@ private struct ParsedBenchmarkArguments {
     var decodeModelURL: URL?
     var tokenizerURL: URL?
     var coreMLGraphInterface: CoreMLBenchmarkGraphInterface = .explicitKV
+    var coreMLLayerCount = 24
+    var coreMLKVHeads = 2
+    var coreMLHeadDimension = 128
+    var tokenizerBOSTokenID = MiniCPMSpecialTokens.bosTokenID
+    var tokenizerEOSTokenIDs = MiniCPMSpecialTokens.eosTokenIDs
     var diagnosticsTopK: Int?
     var diagnosticsPrefixLengths: [Int]?
     var sensitivityBaselineURL: URL?
@@ -821,6 +866,11 @@ private struct ParsedBenchmarkArguments {
             decodeModelURL: decodeModelURL,
             tokenizerURL: tokenizerURL,
             coreMLGraphInterface: coreMLGraphInterface,
+            coreMLLayerCount: coreMLLayerCount,
+            coreMLKVHeads: coreMLKVHeads,
+            coreMLHeadDimension: coreMLHeadDimension,
+            tokenizerBOSTokenID: tokenizerBOSTokenID,
+            tokenizerEOSTokenIDs: tokenizerEOSTokenIDs,
             diagnosticsTopK: diagnosticsTopK,
             diagnosticsPrefixLengths: diagnosticsPrefixLengths,
             sensitivityBaselineURL: sensitivityBaselineURL,
@@ -845,6 +895,13 @@ private func value(after option: String, in arguments: [String], at index: inout
 private func parsePositiveInt(_ value: String, option: String) throws -> Int {
     guard let parsed = Int(value), parsed > 0 else {
         throw RuntimeBenchmarkCommandError.invalidOption("\(option) must be a positive integer")
+    }
+    return parsed
+}
+
+private func parseInt32(_ value: String, option: String) throws -> Int32 {
+    guard let parsed = Int32(value) else {
+        throw RuntimeBenchmarkCommandError.invalidOption("\(option) must be an integer id")
     }
     return parsed
 }
