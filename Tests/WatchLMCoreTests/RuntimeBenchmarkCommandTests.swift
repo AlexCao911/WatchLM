@@ -334,6 +334,57 @@ import Testing
     #expect(FileManager.default.fileExists(atPath: outputURL.path))
 }
 
+@Test func runtimeBenchmarkCommandCanStageQwenAssetsToDestinationRoot() throws {
+    let root = try makeTemporaryDirectory()
+    let assetBaseURL = root.appending(path: "runtime-candidates", directoryHint: .isDirectory)
+    let modelDirectory = assetBaseURL
+        .appending(path: "Models", directoryHint: .isDirectory)
+        .appending(path: "Qwen3", directoryHint: .isDirectory)
+    let statefulURL = modelDirectory
+        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlpackage", directoryHint: .isDirectory)
+    let tokenizerURL = modelDirectory.appending(path: "tokenizer.json")
+    try FileManager.default.createDirectory(at: statefulURL, withIntermediateDirectories: true)
+    try Data("qwen-stateful".utf8).write(to: statefulURL.appending(path: "Manifest.json"))
+    try minimalTokenizerJSONData().write(to: tokenizerURL)
+
+    var manifest = makeQwenStatefulTestManifest()
+    manifest.asset.prefillSHA256 = try ArtifactDigest.sha256Hex(for: statefulURL)
+    manifest.asset.decodeSHA256 = try ArtifactDigest.sha256Hex(for: statefulURL)
+    manifest.asset.tokenizerSHA256 = try ArtifactDigest.sha256Hex(for: tokenizerURL)
+    let manifestURL = root.appending(path: "qwen-manifest.json")
+    let destinationRootURL = root.appending(path: "watch-application-support", directoryHint: .isDirectory)
+    let outputURL = root.appending(path: "qwen-staging-result.json")
+    try JSONEncoder().encode(manifest).write(to: manifestURL)
+
+    let options = try RuntimeBenchmarkCommandOptions.parse(
+        [
+            "--manifest", manifestURL.path,
+            "--asset-base", assetBaseURL.path,
+            "--device-profile", "watch-se-2",
+            "--stage-to", destinationRootURL.path,
+            "--output", outputURL.path
+        ],
+        currentDirectory: root
+    )
+    let result = try RuntimeBenchmarkCommand(options: options).runStageAssets()
+
+    #expect(options.stageDestinationURL?.standardizedFileURL.path() == destinationRootURL.standardizedFileURL.path())
+    #expect(result.itemCount == 3)
+    #expect(result.totalByteCount > 0)
+    #expect(FileManager.default.fileExists(atPath: outputURL.path))
+
+    let targetStore = ModelAssetStore(rootURL: destinationRootURL)
+    let targetManifest = try targetStore.loadManifest()
+    #expect(targetStore.assetState(
+        for: targetManifest,
+        deviceProfile: .watchSE2,
+        runtimeCapabilities: CoreMLRuntimeCapabilities(
+            platform: .watchOS,
+            operatingSystemVersion: OperatingSystemVersion(majorVersion: 11, minorVersion: 0, patchVersion: 0)
+        )
+    ) == .installed(manifest: targetManifest))
+}
+
 @Test func runtimeBenchmarkCommandParsesCoreMLDiagnosticsTopK() throws {
     let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     let modelURL = root.appending(path: "Models/MiniCPM5/stateful-step-256.mlmodelc")

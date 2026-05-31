@@ -9,7 +9,21 @@ struct WatchLMBenchmarkMain {
             let options = try RuntimeBenchmarkCommandOptions.parse(Array(CommandLine.arguments.dropFirst()))
             let command = RuntimeBenchmarkCommand(options: options)
 
-            if options.stagingPlanOnly {
+            if let stageDestinationURL = options.stageDestinationURL {
+                let result = try command.runStageAssets()
+                if let outputURL = options.outputURL {
+                    print("wrote model asset staging result: \(outputURL.path)")
+                    print(
+                        "items: \(result.itemCount), " +
+                        "total_bytes: \(result.totalByteCount), " +
+                        "destination: \(stageDestinationURL.path)"
+                    )
+                } else {
+                    let data = try RuntimeBenchmarkCommand.encode(stagingResult: result)
+                    FileHandle.standardOutput.write(data)
+                    FileHandle.standardOutput.write(Data("\n".utf8))
+                }
+            } else if options.stagingPlanOnly {
                 let plan = try command.runStagingPlan()
                 if let outputURL = options.outputURL {
                     print("wrote model asset staging plan: \(outputURL.path)")
