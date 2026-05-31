@@ -1,4 +1,4 @@
-export const SUPPORTED_CONTEXT_VARIANTS = Object.freeze([256, 512, 1024]);
+export const SUPPORTED_CONTEXT_VARIANTS = Object.freeze([128, 256, 512, 1024]);
 export const SUPPORTED_DEVICE_PROFILES = Object.freeze(["watch-se-2", "watch-se-3"]);
 export const SUPPORTED_KV_CACHE_MODES = Object.freeze([
   "stateful-preferred",
@@ -153,6 +153,7 @@ export function summarizeModelManifest(manifest) {
 
   return {
     modelId: manifest.model.id,
+    modelRole: manifest.model.role ?? "teacher-baseline",
     runtime: manifest.runtime.type,
     deviceProfiles: SUPPORTED_DEVICE_PROFILES.filter(
       (profile) => profile in manifest.deviceProfiles
@@ -167,8 +168,16 @@ export function summarizeModelManifest(manifest) {
 }
 
 function validateModel(manifest, errors) {
-  if (manifest.model?.id !== EXPECTED_MODEL_ID) {
-    errors.push(`model.id must be ${EXPECTED_MODEL_ID}`);
+  if (manifest.model?.id === EXPECTED_MODEL_ID) {
+    return;
+  }
+
+  if (typeof manifest.model?.id !== "string" || manifest.model.id.trim() === "") {
+    errors.push("model.id must be a non-empty string");
+  }
+
+  if (manifest.model?.role !== "runtime-candidate") {
+    errors.push("model.role must be runtime-candidate for non-MiniCPM models");
   }
 }
 
@@ -186,19 +195,21 @@ function validateRuntime(manifest, errors) {
     errors.push("runtime.kvCacheMode must be stateful-preferred, slot-ring, or contiguous-sliding");
   }
 
-  validateRuntimeGraphSchema(manifest.runtime?.graphSchema, errors);
+  validateRuntimeGraphSchema(manifest, errors);
 }
 
-function validateRuntimeGraphSchema(graphSchema, errors) {
+function validateRuntimeGraphSchema(manifest, errors) {
+  const graphSchema = manifest.runtime?.graphSchema;
   if (!isRecord(graphSchema)) {
     errors.push("runtime.graphSchema must describe Core ML prefill/decode IO");
     return;
   }
 
+  const expectedDimensions = expectedGraphDimensions(manifest);
   for (const [field, expected] of Object.entries({
-    layerCount: EXPECTED_GRAPH_SCHEMA.layerCount,
-    kvHeads: EXPECTED_GRAPH_SCHEMA.kvHeads,
-    headDimension: EXPECTED_GRAPH_SCHEMA.headDimension
+    layerCount: expectedDimensions.layerCount,
+    kvHeads: expectedDimensions.kvHeads,
+    headDimension: expectedDimensions.headDimension
   })) {
     if (graphSchema[field] !== expected) {
       errors.push(`runtime.graphSchema.${field} must be ${expected}`);
@@ -238,6 +249,16 @@ function validateNamedSchema(path, schema, expectedSchema, errors) {
 
 function validateArchitecture(manifest, errors) {
   const architecture = manifest.architecture ?? {};
+  if (isMiniCPMManifest(manifest)) {
+    validateMiniCPMArchitecture(architecture, errors);
+  } else if (isRuntimeCandidateManifest(manifest)) {
+    validateRuntimeCandidateArchitecture(architecture, errors);
+  } else {
+    validateMiniCPMArchitecture(architecture, errors);
+  }
+}
+
+function validateMiniCPMArchitecture(architecture, errors) {
   if (architecture.layers !== EXPECTED_ARCHITECTURE.layers) {
     errors.push(`architecture.layers must be ${EXPECTED_ARCHITECTURE.layers}`);
   }
@@ -264,6 +285,30 @@ function validateArchitecture(manifest, errors) {
 
   if (architecture.tokenizer?.vocabularyPreserved !== true) {
     errors.push("vocabulary must be preserved");
+  }
+}
+
+function validateRuntimeCandidateArchitecture(architecture, errors) {
+  if (!isPositiveInteger(architecture.layers)) {
+    errors.push("architecture.layers must be a positive integer");
+  }
+  if (!isPositiveInteger(architecture.hiddenSize)) {
+    errors.push("architecture.hiddenSize must be a positive integer");
+  }
+  if (!isPositiveInteger(architecture.queryHeads)) {
+    errors.push("architecture.queryHeads must be a positive integer");
+  }
+  if (!isPositiveInteger(architecture.kvHeads)) {
+    errors.push("architecture.kvHeads must be a positive integer");
+  }
+  if (!isPositiveInteger(architecture.headDimension)) {
+    errors.push("architecture.headDimension must be a positive integer for runtime candidates");
+  }
+  if (typeof architecture.tokenizer?.source !== "string" || architecture.tokenizer.source.trim() === "") {
+    errors.push("architecture.tokenizer.source must be a non-empty string");
+  }
+  if (typeof architecture.tokenizer?.chatTemplate !== "string" || architecture.tokenizer.chatTemplate.trim() === "") {
+    errors.push("architecture.tokenizer.chatTemplate must be a non-empty string");
   }
 }
 
@@ -401,7 +446,7 @@ function validateQuantization(manifest, errors) {
     errors.push("quantization.kvCache must be fp16 or int8");
   }
 
-  if (quantization.structuralReduction !== false) {
+  if (!isRuntimeCandidateManifest(manifest) && quantization.structuralReduction !== false) {
     errors.push("structuralReduction must be false");
   }
 
@@ -471,10 +516,38 @@ function validateFallbackPolicy(manifest, warnings) {
   }
 }
 
+function expectedGraphDimensions(manifest) {
+  if (!isRuntimeCandidateManifest(manifest)) {
+    return {
+      layerCount: EXPECTED_GRAPH_SCHEMA.layerCount,
+      kvHeads: EXPECTED_GRAPH_SCHEMA.kvHeads,
+      headDimension: EXPECTED_GRAPH_SCHEMA.headDimension
+    };
+  }
+
+  return {
+    layerCount: manifest.architecture?.layers,
+    kvHeads: manifest.architecture?.kvHeads,
+    headDimension: manifest.architecture?.headDimension
+  };
+}
+
+function isMiniCPMManifest(manifest) {
+  return manifest.model?.id === EXPECTED_MODEL_ID;
+}
+
+function isRuntimeCandidateManifest(manifest) {
+  return !isMiniCPMManifest(manifest) && manifest.model?.role === "runtime-candidate";
+}
+
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function isSHA256(value) {
   return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}
+
+function isPositiveInteger(value) {
+  return Number.isInteger(value) && value > 0;
 }

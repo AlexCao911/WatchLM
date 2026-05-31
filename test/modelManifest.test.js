@@ -87,7 +87,7 @@ test("manifest constants encode the fidelity-first MiniCPM5 contract", () => {
       newValuePrefix: "new_value_"
     }
   });
-  assert.deepEqual(SUPPORTED_CONTEXT_VARIANTS, [256, 512, 1024]);
+  assert.deepEqual(SUPPORTED_CONTEXT_VARIANTS, [128, 256, 512, 1024]);
   assert.deepEqual(EXPECTED_ARCHITECTURE, {
     layers: 24,
     hiddenSize: 1536,
@@ -184,14 +184,14 @@ test("runtime KV cache mode must stay in the explicit Swift update strategy set"
   );
 });
 
-test("source model must stay MiniCPM5-1B", () => {
+test("MiniCPM baseline keeps strict source model identity", () => {
   const manifest = clone(validManifest);
   manifest.model.id = "openbmb/OtherModel";
 
   const result = validateModelManifest(manifest);
 
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /model\.id must be openbmb\/MiniCPM5-1B/);
+  assert.match(result.errors.join("\n"), /model.role must be runtime-candidate for non-MiniCPM models/);
 });
 
 test("architecture must preserve MiniCPM5 dimensions and tokenizer", () => {
@@ -212,6 +212,80 @@ test("architecture must preserve MiniCPM5 dimensions and tokenizer", () => {
   assert.match(result.errors.join("\n"), /architecture\.kvHeads must be 2/);
   assert.match(result.errors.join("\n"), /tokenizer must be preserved/);
   assert.match(result.errors.join("\n"), /vocabulary must be preserved/);
+});
+
+test("runtime candidate manifest can declare a smaller distilled model", () => {
+  const manifest = clone(validManifest);
+  manifest.model = {
+    id: "watchlm/distilled-350m",
+    revision: "student-v0",
+    parameterCount: 350000000,
+    role: "runtime-candidate"
+  };
+  manifest.runtime.graphSchema.layerCount = 18;
+  manifest.runtime.graphSchema.kvHeads = 4;
+  manifest.runtime.graphSchema.headDimension = 64;
+  manifest.architecture = {
+    type: "distilled-causal-lm",
+    layers: 18,
+    hiddenSize: 1024,
+    queryHeads: 16,
+    kvHeads: 4,
+    headDimension: 64,
+    maxContextTokens: 512,
+    tokenizer: {
+      source: "watchlm/distilled-350m",
+      preserved: false,
+      vocabularyPreserved: false,
+      chatTemplate: "watchlm-short-turn-v1"
+    }
+  };
+  manifest.contextVariants = [128, 256];
+  manifest.deviceProfiles["watch-se-2"].defaultContextVariant = 128;
+  manifest.deviceProfiles["watch-se-3"].defaultContextVariant = 256;
+  manifest.asset.prefillPath = "Models/WatchLM350M/stateful-step-256.mlpackage";
+  manifest.asset.decodePath = "Models/WatchLM350M/stateful-step-256.mlpackage";
+  manifest.asset.tokenizerPath = "Models/WatchLM350M/tokenizer.json";
+  manifest.asset.variants = {
+    128: {
+      deviceProfile: "watch-se-2",
+      prefillPath: "Models/WatchLM350M/stateful-step-128.mlpackage",
+      decodePath: "Models/WatchLM350M/stateful-step-128.mlpackage",
+      tokenizerPath: "Models/WatchLM350M/tokenizer.json",
+      sha256: "1111111111111111111111111111111111111111111111111111111111111111",
+      prefillSHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      decodeSHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      tokenizerSHA256: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    256: {
+      deviceProfile: "watch-se-3",
+      prefillPath: "Models/WatchLM350M/stateful-step-256.mlpackage",
+      decodePath: "Models/WatchLM350M/stateful-step-256.mlpackage",
+      tokenizerPath: "Models/WatchLM350M/tokenizer.json",
+      sha256: "2222222222222222222222222222222222222222222222222222222222222222",
+      prefillSHA256: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      decodeSHA256: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      tokenizerSHA256: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  };
+  manifest.quantization.structuralReduction = true;
+
+  const result = validateModelManifest(manifest);
+
+  assert.equal(result.ok, true, result.errors.join("\n"));
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(summarizeModelManifest(manifest), {
+    modelId: "watchlm/distilled-350m",
+    modelRole: "runtime-candidate",
+    runtime: "coreml-mlprogram",
+    deviceProfiles: ["watch-se-2", "watch-se-3"],
+    contextVariants: [128, 256],
+    assetStorage: "application-support",
+    assetVariants: [128, 256],
+    kvCacheMode: "stateful-preferred",
+    quantizationStrategy: "mixed-precision-fidelity-first",
+    kvCachePrecision: "int8"
+  });
 });
 
 test("context variants must be supported Apple Watch SE sizes", () => {
@@ -385,7 +459,7 @@ test("assertValidModelManifest throws one combined validation error", () => {
 
   assert.throws(
     () => assertValidModelManifest(manifest),
-    /Invalid model manifest:\n- model\.id must be openbmb\/MiniCPM5-1B\n- runtime\.type must be coreml-mlprogram/
+    /Invalid model manifest:\n- model\.role must be runtime-candidate for non-MiniCPM models\n- runtime\.type must be coreml-mlprogram/
   );
 });
 
@@ -394,6 +468,7 @@ test("summarizeModelManifest exposes audit-friendly details", () => {
 
   assert.deepEqual(summary, {
     modelId: "openbmb/MiniCPM5-1B",
+    modelRole: "teacher-baseline",
     runtime: "coreml-mlprogram",
     deviceProfiles: ["watch-se-2", "watch-se-3"],
     contextVariants: [256, 512, 1024],

@@ -12,9 +12,7 @@ public struct ModelManifest: Codable, Equatable, Sendable {
     public var validationErrors: [String] {
         var errors: [String] = []
 
-        if model.id != ModelManifestContract.expectedModelId {
-            errors.append("model.id must be \(ModelManifestContract.expectedModelId)")
-        }
+        validateModel(into: &errors)
 
         if runtime.type != ModelManifestContract.expectedRuntime {
             errors.append("runtime.type must be \(ModelManifestContract.expectedRuntime)")
@@ -30,29 +28,7 @@ public struct ModelManifest: Codable, Equatable, Sendable {
 
         validateRuntimeGraphSchema(into: &errors)
 
-        if architecture.layers != ModelManifestContract.layers {
-            errors.append("architecture.layers must be \(ModelManifestContract.layers)")
-        }
-
-        if architecture.hiddenSize != ModelManifestContract.hiddenSize {
-            errors.append("architecture.hiddenSize must be \(ModelManifestContract.hiddenSize)")
-        }
-
-        if architecture.queryHeads != ModelManifestContract.queryHeads {
-            errors.append("architecture.queryHeads must be \(ModelManifestContract.queryHeads)")
-        }
-
-        if architecture.kvHeads != ModelManifestContract.kvHeads {
-            errors.append("architecture.kvHeads must be \(ModelManifestContract.kvHeads)")
-        }
-
-        if !architecture.tokenizer.preserved {
-            errors.append("tokenizer must be preserved")
-        }
-
-        if !architecture.tokenizer.vocabularyPreserved {
-            errors.append("vocabulary must be preserved")
-        }
+        validateArchitecture(into: &errors)
 
         for variant in contextVariants where !ModelManifestContract.supportedContextVariants.contains(variant) {
             errors.append("unsupported context variant \(variant)")
@@ -88,11 +64,33 @@ public struct ModelManifest: Codable, Equatable, Sendable {
             errors.append("quantization.kvCache must be fp16 or int8")
         }
 
-        if quantization.structuralReduction {
+        if !isRuntimeCandidateManifest && quantization.structuralReduction {
             errors.append("structuralReduction must be false")
         }
 
         return errors
+    }
+
+    private var isMiniCPMBaseline: Bool {
+        model.id == ModelManifestContract.expectedModelId
+    }
+
+    private var isRuntimeCandidateManifest: Bool {
+        !isMiniCPMBaseline && model.role == "runtime-candidate"
+    }
+
+    private func validateModel(into errors: inout [String]) {
+        if isMiniCPMBaseline {
+            return
+        }
+
+        if model.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            errors.append("model.id must be a non-empty string")
+        }
+
+        if model.role != "runtime-candidate" {
+            errors.append("model.role must be runtime-candidate for non-MiniCPM models")
+        }
     }
 
     private func validateRuntimeGraphSchema(into errors: inout [String]) {
@@ -102,16 +100,17 @@ public struct ModelManifest: Codable, Equatable, Sendable {
             errors.append("runtime.graphSchema.interface must be logits-layered-kv, stateful-kv, or stateful-step-kv")
         }
 
-        if graphSchema.layerCount != ModelManifestContract.layers {
-            errors.append("runtime.graphSchema.layerCount must be \(ModelManifestContract.layers)")
+        let expectedDimensions = expectedGraphDimensions
+        if graphSchema.layerCount != expectedDimensions.layerCount {
+            errors.append("runtime.graphSchema.layerCount must be \(expectedDimensions.layerCount)")
         }
 
-        if graphSchema.kvHeads != ModelManifestContract.kvHeads {
-            errors.append("runtime.graphSchema.kvHeads must be \(ModelManifestContract.kvHeads)")
+        if graphSchema.kvHeads != expectedDimensions.kvHeads {
+            errors.append("runtime.graphSchema.kvHeads must be \(expectedDimensions.kvHeads)")
         }
 
-        if graphSchema.headDimension != ModelManifestContract.headDimension {
-            errors.append("runtime.graphSchema.headDimension must be \(ModelManifestContract.headDimension)")
+        if graphSchema.headDimension != expectedDimensions.headDimension {
+            errors.append("runtime.graphSchema.headDimension must be \(expectedDimensions.headDimension)")
         }
 
         if graphSchema.prefill.inputIDs != ModelManifestContract.prefillInputIDs {
@@ -170,6 +169,86 @@ public struct ModelManifest: Codable, Equatable, Sendable {
 
         if graphSchema.decode.newValuePrefix != ModelManifestContract.decodeNewValuePrefix {
             errors.append("runtime.graphSchema.decode.newValuePrefix must be \(ModelManifestContract.decodeNewValuePrefix)")
+        }
+    }
+
+    private var expectedGraphDimensions: (layerCount: Int, kvHeads: Int, headDimension: Int) {
+        if isMiniCPMBaseline || !isRuntimeCandidateManifest {
+            return (
+                ModelManifestContract.layers,
+                ModelManifestContract.kvHeads,
+                ModelManifestContract.headDimension
+            )
+        }
+
+        return (
+            architecture.layers,
+            architecture.kvHeads,
+            architecture.headDimension ?? -1
+        )
+    }
+
+    private func validateArchitecture(into errors: inout [String]) {
+        if isMiniCPMBaseline || !isRuntimeCandidateManifest {
+            validateMiniCPMArchitecture(into: &errors)
+        } else {
+            validateRuntimeCandidateArchitecture(into: &errors)
+        }
+    }
+
+    private func validateMiniCPMArchitecture(into errors: inout [String]) {
+        if architecture.layers != ModelManifestContract.layers {
+            errors.append("architecture.layers must be \(ModelManifestContract.layers)")
+        }
+
+        if architecture.hiddenSize != ModelManifestContract.hiddenSize {
+            errors.append("architecture.hiddenSize must be \(ModelManifestContract.hiddenSize)")
+        }
+
+        if architecture.queryHeads != ModelManifestContract.queryHeads {
+            errors.append("architecture.queryHeads must be \(ModelManifestContract.queryHeads)")
+        }
+
+        if architecture.kvHeads != ModelManifestContract.kvHeads {
+            errors.append("architecture.kvHeads must be \(ModelManifestContract.kvHeads)")
+        }
+
+        if !architecture.tokenizer.preserved {
+            errors.append("tokenizer must be preserved")
+        }
+
+        if !architecture.tokenizer.vocabularyPreserved {
+            errors.append("vocabulary must be preserved")
+        }
+    }
+
+    private func validateRuntimeCandidateArchitecture(into errors: inout [String]) {
+        if architecture.layers <= 0 {
+            errors.append("architecture.layers must be a positive integer")
+        }
+
+        if architecture.hiddenSize <= 0 {
+            errors.append("architecture.hiddenSize must be a positive integer")
+        }
+
+        if architecture.queryHeads <= 0 {
+            errors.append("architecture.queryHeads must be a positive integer")
+        }
+
+        if architecture.kvHeads <= 0 {
+            errors.append("architecture.kvHeads must be a positive integer")
+        }
+
+        if architecture.headDimension == nil || architecture.headDimension ?? 0 <= 0 {
+            errors.append("architecture.headDimension must be a positive integer for runtime candidates")
+        }
+
+        if architecture.tokenizer.source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            errors.append("architecture.tokenizer.source must be a non-empty string")
+        }
+
+        if architecture.tokenizer.chatTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            errors.append("architecture.tokenizer.chatTemplate must be a non-empty string")
         }
     }
 
@@ -236,6 +315,19 @@ public struct ModelInfo: Codable, Equatable, Sendable {
     public var id: String
     public var revision: String
     public var parameterCount: Int
+    public var role: String?
+
+    public init(
+        id: String,
+        revision: String,
+        parameterCount: Int,
+        role: String? = nil
+    ) {
+        self.id = id
+        self.revision = revision
+        self.parameterCount = parameterCount
+        self.role = role
+    }
 }
 
 public struct RuntimeInfo: Codable, Equatable, Sendable {
@@ -301,8 +393,29 @@ public struct ArchitectureInfo: Codable, Equatable, Sendable {
     public var hiddenSize: Int
     public var queryHeads: Int
     public var kvHeads: Int
+    public var headDimension: Int?
     public var maxContextTokens: Int
     public var tokenizer: TokenizerInfo
+
+    public init(
+        type: String,
+        layers: Int,
+        hiddenSize: Int,
+        queryHeads: Int,
+        kvHeads: Int,
+        headDimension: Int? = nil,
+        maxContextTokens: Int,
+        tokenizer: TokenizerInfo
+    ) {
+        self.type = type
+        self.layers = layers
+        self.hiddenSize = hiddenSize
+        self.queryHeads = queryHeads
+        self.kvHeads = kvHeads
+        self.headDimension = headDimension
+        self.maxContextTokens = maxContextTokens
+        self.tokenizer = tokenizer
+    }
 }
 
 public struct TokenizerInfo: Codable, Equatable, Sendable {
@@ -492,7 +605,7 @@ enum ModelManifestContract {
     static let queryHeads = 16
     static let kvHeads = 2
     static let headDimension = 128
-    static let supportedContextVariants = [256, 512, 1024]
+    static let supportedContextVariants = [128, 256, 512, 1024]
     static let prefillInputIDs = "input_ids"
     static let prefillPositionIDs = "position_ids"
     static let causalMask = "causal_mask"

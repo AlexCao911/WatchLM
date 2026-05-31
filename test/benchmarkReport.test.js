@@ -57,7 +57,7 @@ test("report validation requires model, device, runtime, timing, memory, thermal
   assert.match(result.errors.join("\n"), /sourceModelId must be openbmb\/MiniCPM5-1B/);
   assert.match(result.errors.join("\n"), /deviceProfile must be watch-se-2 or watch-se-3/);
   assert.match(result.errors.join("\n"), /runtime must be coreml-mlprogram/);
-  assert.match(result.errors.join("\n"), /contextVariant must be one of 256, 512, 1024/);
+  assert.match(result.errors.join("\n"), /contextVariant must be one of 128, 256, 512, 1024/);
   assert.match(result.errors.join("\n"), /artifact\.sizeBytes must be a positive number/);
   assert.match(result.errors.join("\n"), /timings\.loadMs must be a non-negative number/);
   assert.match(result.errors.join("\n"), /timings\.prefillMs must be a non-negative number/);

@@ -19,6 +19,69 @@ import Testing
     #expect(manifest.validationErrors.isEmpty)
 }
 
+@Test func runtimeCandidateManifestCanDeclareSmallerDistilledModel() throws {
+    var manifest = try loadSampleManifest()
+    manifest.model = ModelInfo(
+        id: "watchlm/distilled-350m",
+        revision: "student-v0",
+        parameterCount: 350_000_000,
+        role: "runtime-candidate"
+    )
+    manifest.runtime.graphSchema.layerCount = 18
+    manifest.runtime.graphSchema.kvHeads = 4
+    manifest.runtime.graphSchema.headDimension = 64
+    manifest.architecture = ArchitectureInfo(
+        type: "distilled-causal-lm",
+        layers: 18,
+        hiddenSize: 1024,
+        queryHeads: 16,
+        kvHeads: 4,
+        headDimension: 64,
+        maxContextTokens: 512,
+        tokenizer: TokenizerInfo(
+            source: "watchlm/distilled-350m",
+            preserved: false,
+            vocabularyPreserved: false,
+            chatTemplate: "watchlm-short-turn-v1"
+        )
+    )
+    manifest.contextVariants = [128, 256]
+    manifest.deviceProfiles["watch-se-2"]?.defaultContextVariant = 128
+    manifest.deviceProfiles["watch-se-3"]?.defaultContextVariant = 256
+    manifest.asset.prefillPath = "Models/WatchLM350M/stateful-step-256.mlpackage"
+    manifest.asset.decodePath = "Models/WatchLM350M/stateful-step-256.mlpackage"
+    manifest.asset.tokenizerPath = "Models/WatchLM350M/tokenizer.json"
+    manifest.asset.variants = [
+        "128": ModelArtifactVariant(
+            deviceProfile: "watch-se-2",
+            prefillPath: "Models/WatchLM350M/stateful-step-128.mlpackage",
+            decodePath: "Models/WatchLM350M/stateful-step-128.mlpackage",
+            tokenizerPath: "Models/WatchLM350M/tokenizer.json",
+            sha256: String(repeating: "1", count: 64),
+            prefillSHA256: String(repeating: "a", count: 64),
+            decodeSHA256: String(repeating: "a", count: 64),
+            tokenizerSHA256: String(repeating: "c", count: 64)
+        ),
+        "256": ModelArtifactVariant(
+            deviceProfile: "watch-se-3",
+            prefillPath: "Models/WatchLM350M/stateful-step-256.mlpackage",
+            decodePath: "Models/WatchLM350M/stateful-step-256.mlpackage",
+            tokenizerPath: "Models/WatchLM350M/tokenizer.json",
+            sha256: String(repeating: "2", count: 64),
+            prefillSHA256: String(repeating: "d", count: 64),
+            decodeSHA256: String(repeating: "d", count: 64),
+            tokenizerSHA256: String(repeating: "c", count: 64)
+        )
+    ]
+    manifest.quantization.structuralReduction = true
+
+    #expect(manifest.validationErrors.isEmpty)
+    let se2Artifact = try manifest.modelArtifact(for: .watchSE2, requestedContextTokens: nil)
+    #expect(se2Artifact.contextVariant == 128)
+    #expect(se2Artifact.prefillPath == "Models/WatchLM350M/stateful-step-128.mlpackage")
+    #expect(se2Artifact.decodePath == se2Artifact.prefillPath)
+}
+
 @Test func selectsModelArtifactForSE2AndSE3() throws {
     let manifest = try loadSampleManifest()
 
@@ -306,7 +369,7 @@ import Testing
     manifest.runtime.graphSchema.prefill.logits = "next_token"
     manifest.architecture.layers = 23
 
-    #expect(manifest.validationErrors.contains("model.id must be openbmb/MiniCPM5-1B"))
+    #expect(manifest.validationErrors.contains("model.role must be runtime-candidate for non-MiniCPM models"))
     #expect(manifest.validationErrors.contains("runtime.type must be coreml-mlprogram"))
     #expect(manifest.validationErrors.contains("runtime.kvCacheMode must be stateful-preferred, slot-ring, or contiguous-sliding"))
     #expect(manifest.validationErrors.contains("runtime.graphSchema.interface must be logits-layered-kv, stateful-kv, or stateful-step-kv"))
