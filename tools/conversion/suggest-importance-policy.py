@@ -9,7 +9,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_IMPORTANCE_REPORT = ROOT / "artifacts" / "benchmarks" / "minicpm5-activation-importance-cal12.json"
-SUPPORTED_COMPONENTS = {"attentionQKO", "attentionV", "ffn"}
+SUPPORTED_COMPONENTS = {"attentionQKO", "attentionV", "ffn", "ffnGateUp", "ffnDown"}
 
 
 def main() -> None:

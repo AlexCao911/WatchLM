@@ -132,6 +132,59 @@ test("importance policy suggestion can filter concentrated channel outliers", as
   ]);
 });
 
+test("importance policy suggestion can target FFN gate/up subcomponents", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "watchlm-policy-ffn-split-"));
+  const reportPath = path.join(tempDir, "importance-split-ffn.json");
+  const policyPath = path.join(tempDir, "ffn-gateup-policy.json");
+  await writeFile(reportPath, JSON.stringify(sampleSplitFFNImportanceReport()), "utf8");
+
+  const { stdout } = await execFileAsync(python, [
+    suggestionScript,
+    "--importance-report",
+    reportPath,
+    "--component",
+    "ffnGateUp",
+    "--candidate-count",
+    "2",
+    "--protected-edge-layer-count",
+    "1",
+    "--policy-id",
+    "importance-ffn-gateup-low2",
+    "--output",
+    policyPath
+  ], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const policy = JSON.parse(stdout);
+
+  assert.deepEqual(policy.layerOverrides, {
+    ffnGateUp: {
+      2: "int4",
+      3: "int4"
+    }
+  });
+  assert.equal(policy.candidateEvidence.component, "ffnGateUp");
+  assert.deepEqual(policy.candidateEvidence.selectedLayers.map((item) => item.layerIndex), [2, 3]);
+
+  const { stdout: described } = await execFileAsync(python, [
+    conversionScript,
+    "--compression",
+    "mixed",
+    "--precision-policy",
+    policyPath,
+    "--describe-compression-policy"
+  ], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const plan = JSON.parse(described);
+  assert.equal(plan.layerPrecision["2"].ffnGateUp, "int4");
+  assert.equal(plan.layerPrecision["2"].ffnDown, "fp16");
+  assert.equal(plan.layerPrecision["3"].ffnGateUp, "int4");
+  assert.equal(plan.layerPrecision["3"].ffnDown, "fp16");
+});
+
 function sampleImportanceReport() {
   return {
     schemaVersion: 1,
@@ -174,6 +227,30 @@ function sampleGroupedImportanceReport() {
     module("model.layers.6.self_attn.v_proj", "attentionV", 6, 40, 0.03)
   ];
   return report;
+}
+
+function sampleSplitFFNImportanceReport() {
+  return {
+    schemaVersion: 1,
+    sourceModelId: "openbmb/MiniCPM5-1B",
+    calibration: {
+      promptCount: 12,
+      contextTokens: 256,
+      prefixTokenCounts: [1, 2, 4, 8, 12, 18, 32]
+    },
+    layerSummary: [
+      layer(0, { ffnGateUp: 1, ffnDown: 1 }),
+      layer(1, { ffnGateUp: 0, ffnDown: 2 }),
+      layer(2, { ffnGateUp: 10, ffnDown: 30 }),
+      layer(3, { ffnGateUp: 20, ffnDown: 15 }),
+      layer(4, { ffnGateUp: 5, ffnDown: 10 })
+    ],
+    modules: [
+      module("model.layers.2.mlp.gate_proj", "ffnGateUp", 2, 10, 0.01),
+      module("model.layers.3.mlp.up_proj", "ffnGateUp", 3, 20, 0.02),
+      module("model.layers.2.mlp.down_proj", "ffnDown", 2, 30, 0.01)
+    ]
+  };
 }
 
 function layer(layerIndex, componentTotals) {

@@ -797,7 +797,9 @@ def load_mixed_precision_policy(policy_path: str | Path) -> dict[str, Any]:
         "layerOverrides": layer_overrides,
         "int4Compression": int4_compression,
         "ffnSubcomponentMode": any(
-            component in weights or component in (policy.get("opNamePatterns") or {})
+            component in weights
+            or component in (policy.get("opNamePatterns") or {})
+            or component in layer_overrides
             for component in FFN_SUBCOMPONENTS
         ),
     }
