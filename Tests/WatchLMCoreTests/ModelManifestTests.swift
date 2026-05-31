@@ -138,6 +138,9 @@ import Testing
     #expect(se3Artifact.decodePath == se2Artifact.prefillPath)
     #expect(se2Artifact.tokenizerPath == "Models/Qwen3/tokenizer.json")
     #expect(se3Artifact.tokenizerPath == "Models/Qwen3/tokenizer.json")
+    #expect(se2Artifact.prefillSHA256 == "eec61f0a0900c4cc66b10e7b82534a0cf9c2aa31845bf24baa483f12e7a84c03")
+    #expect(se2Artifact.decodeSHA256 == se2Artifact.prefillSHA256)
+    #expect(se2Artifact.tokenizerSHA256 == "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4")
 }
 
 @Test func selectsModelArtifactForSE2AndSE3() throws {

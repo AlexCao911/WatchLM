@@ -86,3 +86,44 @@ import Testing
         Issue.record("Expected watchOS 10 to reject Qwen stateful-step runtime")
     }
 }
+
+@Test func modelAssetStoreBuildsQwenDeviceStagingPlanWithoutDuplicatingStatefulArtifact() throws {
+    let rootURL = try makeTemporaryDirectory()
+    let modelDirectory = rootURL
+        .appending(path: "Models", directoryHint: .isDirectory)
+        .appending(path: "Qwen3", directoryHint: .isDirectory)
+    let statefulURL = modelDirectory
+        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlpackage", directoryHint: .isDirectory)
+    let tokenizerURL = modelDirectory.appending(path: "tokenizer.json")
+    try FileManager.default.createDirectory(at: statefulURL, withIntermediateDirectories: true)
+    try Data("qwen-stateful".utf8).write(to: statefulURL.appending(path: "Manifest.json"))
+    try minimalTokenizerJSONData().write(to: tokenizerURL)
+
+    var manifest = makeQwenStatefulTestManifest()
+    manifest.asset.prefillSHA256 = try ArtifactDigest.sha256Hex(for: statefulURL)
+    manifest.asset.decodeSHA256 = try ArtifactDigest.sha256Hex(for: statefulURL)
+    manifest.asset.tokenizerSHA256 = try ArtifactDigest.sha256Hex(for: tokenizerURL)
+
+    let store = ModelAssetStore(rootURL: rootURL)
+    try store.saveManifest(manifest)
+
+    let plan = try store.stagingPlan(
+        for: manifest,
+        deviceProfile: .watchSE2
+    )
+
+    #expect(plan.deviceProfile == .watchSE2)
+    #expect(plan.contextVariant == 256)
+    #expect(plan.destinationRootDescription == "Application Support/WatchLM")
+    #expect(plan.items.map(\.destinationRelativePath) == [
+        "model-manifest.json",
+        "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage",
+        "Models/Qwen3/tokenizer.json"
+    ])
+    #expect(plan.items[1].purposes == [.prefill, .decode])
+    #expect(plan.items[1].expectedSHA256 == manifest.asset.prefillSHA256)
+    #expect(plan.items[1].actualSHA256 == manifest.asset.prefillSHA256)
+    #expect(plan.items[2].actualSHA256 == manifest.asset.tokenizerSHA256)
+    #expect(plan.totalByteCount == plan.items.reduce(0) { $0 + $1.byteCount })
+    #expect(plan.totalByteCount > 0)
+}

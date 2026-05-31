@@ -288,6 +288,52 @@ import Testing
     #expect(options.chatTemplate == .qwen3NonThinking)
 }
 
+@Test func runtimeBenchmarkCommandCanWriteQwenStatefulDeviceStagingPlan() throws {
+    let root = try makeTemporaryDirectory()
+    let assetBaseURL = root.appending(path: "runtime-candidates", directoryHint: .isDirectory)
+    let modelDirectory = assetBaseURL
+        .appending(path: "Models", directoryHint: .isDirectory)
+        .appending(path: "Qwen3", directoryHint: .isDirectory)
+    let statefulURL = modelDirectory
+        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlpackage", directoryHint: .isDirectory)
+    let tokenizerURL = modelDirectory.appending(path: "tokenizer.json")
+    try FileManager.default.createDirectory(at: statefulURL, withIntermediateDirectories: true)
+    try Data("qwen-stateful".utf8).write(to: statefulURL.appending(path: "Manifest.json"))
+    try minimalTokenizerJSONData().write(to: tokenizerURL)
+
+    var manifest = makeQwenStatefulTestManifest()
+    manifest.asset.prefillSHA256 = try ArtifactDigest.sha256Hex(for: statefulURL)
+    manifest.asset.decodeSHA256 = try ArtifactDigest.sha256Hex(for: statefulURL)
+    manifest.asset.tokenizerSHA256 = try ArtifactDigest.sha256Hex(for: tokenizerURL)
+    let manifestURL = root.appending(path: "qwen-manifest.json")
+    let outputURL = root.appending(path: "qwen-staging-plan.json")
+    try JSONEncoder().encode(manifest).write(to: manifestURL)
+
+    let options = try RuntimeBenchmarkCommandOptions.parse(
+        [
+            "--manifest", manifestURL.path,
+            "--asset-base", assetBaseURL.path,
+            "--device-profile", "watch-se-2",
+            "--staging-plan",
+            "--output", outputURL.path
+        ],
+        currentDirectory: root
+    )
+    let plan = try RuntimeBenchmarkCommand(options: options).runStagingPlan()
+
+    #expect(options.stagingPlanOnly)
+    #expect(plan.deviceProfile == .watchSE2)
+    #expect(plan.items.map(\.destinationRelativePath) == [
+        "model-manifest.json",
+        "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage",
+        "Models/Qwen3/tokenizer.json"
+    ])
+    #expect(plan.items[1].purposes == [.prefill, .decode])
+    #expect(plan.items[1].actualSHA256 == manifest.asset.prefillSHA256)
+    #expect(plan.items[2].actualSHA256 == manifest.asset.tokenizerSHA256)
+    #expect(FileManager.default.fileExists(atPath: outputURL.path))
+}
+
 @Test func runtimeBenchmarkCommandParsesCoreMLDiagnosticsTopK() throws {
     let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     let modelURL = root.appending(path: "Models/MiniCPM5/stateful-step-256.mlmodelc")

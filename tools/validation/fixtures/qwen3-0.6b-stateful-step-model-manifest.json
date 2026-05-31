@@ -73,10 +73,10 @@
     "prefillPath": "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage",
     "decodePath": "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage",
     "tokenizerPath": "Models/Qwen3/tokenizer.json",
-    "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
-    "prefillSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "decodeSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "tokenizerSHA256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    "sha256": "eec61f0a0900c4cc66b10e7b82534a0cf9c2aa31845bf24baa483f12e7a84c03",
+    "prefillSHA256": "eec61f0a0900c4cc66b10e7b82534a0cf9c2aa31845bf24baa483f12e7a84c03",
+    "decodeSHA256": "eec61f0a0900c4cc66b10e7b82534a0cf9c2aa31845bf24baa483f12e7a84c03",
+    "tokenizerSHA256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4"
   },
   "quantization": {
     "strategy": "mixed-precision-fidelity-first",

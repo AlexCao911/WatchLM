@@ -9,7 +9,21 @@ struct WatchLMBenchmarkMain {
             let options = try RuntimeBenchmarkCommandOptions.parse(Array(CommandLine.arguments.dropFirst()))
             let command = RuntimeBenchmarkCommand(options: options)
 
-            if options.runsSensitivityComparison {
+            if options.stagingPlanOnly {
+                let plan = try command.runStagingPlan()
+                if let outputURL = options.outputURL {
+                    print("wrote model asset staging plan: \(outputURL.path)")
+                    print(
+                        "items: \(plan.items.count), " +
+                        "total_bytes: \(plan.totalByteCount), " +
+                        "destination: \(plan.destinationRootDescription)"
+                    )
+                } else {
+                    let data = try RuntimeBenchmarkCommand.encode(stagingPlan: plan)
+                    FileHandle.standardOutput.write(data)
+                    FileHandle.standardOutput.write(Data("\n".utf8))
+                }
+            } else if options.runsSensitivityComparison {
                 let report = try command.runSensitivityComparison()
                 if let outputURL = options.outputURL {
                     print("wrote quantization sensitivity report: \(outputURL.path)")

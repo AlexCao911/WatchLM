@@ -224,6 +224,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public var sensitivityCandidateURL: URL?
     public var loadOnly: Bool
     public var coreMLLoadTarget: CoreMLLoadTarget
+    public var stagingPlanOnly: Bool
     public var mockTokens: [String]
     public var mockTokenIDs: [Int32]
 
@@ -264,6 +265,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         sensitivityCandidateURL: URL? = nil,
         loadOnly: Bool = false,
         coreMLLoadTarget: CoreMLLoadTarget = .both,
+        stagingPlanOnly: Bool = false,
         mockTokens: [String] = ["A"],
         mockTokenIDs: [Int32] = [1]
     ) {
@@ -303,6 +305,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         self.sensitivityCandidateURL = sensitivityCandidateURL
         self.loadOnly = loadOnly
         self.coreMLLoadTarget = coreMLLoadTarget
+        self.stagingPlanOnly = stagingPlanOnly
         self.mockTokens = mockTokens
         self.mockTokenIDs = mockTokenIDs
     }
@@ -401,6 +404,8 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
             case "--coreml-load-target":
                 values.coreMLLoadTarget = try CoreMLLoadTarget(rawValue: value(after: argument, in: arguments, at: &index))
                     .orThrowInvalid("\(argument) must be both, prefill, or decode")
+            case "--staging-plan":
+                values.stagingPlanOnly = true
             case "--mock-tokens":
                 values.mockTokens = try parseStringList(value(after: argument, in: arguments, at: &index), option: argument)
             case "--mock-token-ids":
@@ -455,6 +460,7 @@ public struct RuntimeBenchmarkCommand: Sendable {
       --sensitivity-candidate PATH Candidate Core ML diagnostics JSON for quantization drift scoring.
       --load-only                  Load runtime artifacts and skip prompt generation.
       --coreml-load-target both|prefill|decode
+      --staging-plan               Write a model asset staging plan and skip runtime loading.
     """
 
     private let options: RuntimeBenchmarkCommandOptions
@@ -542,6 +548,23 @@ public struct RuntimeBenchmarkCommand: Sendable {
         return report
     }
 
+    public func runStagingPlan() throws -> ModelAssetStagingPlan {
+        let manifestURL = try requiredURL(options.manifestURL, "--manifest")
+        let manifest = try JSONDecoder().decode(ModelManifest.self, from: Data(contentsOf: manifestURL))
+        let baseURL = options.assetBaseURL ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let plan = try ModelAssetStore(rootURL: baseURL).stagingPlan(
+            for: manifest,
+            deviceProfile: options.deviceProfile,
+            requestedContextTokens: options.contextVariant,
+            manifestSourceURL: manifestURL
+        )
+
+        if let outputURL = options.outputURL {
+            try write(stagingPlan: plan, to: outputURL)
+        }
+        return plan
+    }
+
     public static func encode(report: RuntimeBenchmarkReport) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -558,6 +581,12 @@ public struct RuntimeBenchmarkCommand: Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try encoder.encode(sensitivityReport)
+    }
+
+    public static func encode(stagingPlan: ModelAssetStagingPlan) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(stagingPlan)
     }
 
     private static func diagnosticPoints(from report: CoreMLDiagnosticsReport) -> [LogitsDiagnosticPoint] {
@@ -888,6 +917,14 @@ public struct RuntimeBenchmarkCommand: Sendable {
         try Self.encode(sensitivityReport: sensitivityReport).write(to: outputURL)
     }
 
+    private func write(stagingPlan: ModelAssetStagingPlan, to outputURL: URL) throws {
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Self.encode(stagingPlan: stagingPlan).write(to: outputURL)
+    }
+
     private func displayPath(_ url: URL) -> String {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .standardizedFileURL
@@ -937,6 +974,7 @@ private struct ParsedBenchmarkArguments {
     var sensitivityCandidateURL: URL?
     var loadOnly = false
     var coreMLLoadTarget: CoreMLLoadTarget = .both
+    var stagingPlanOnly = false
     var mockTokens = ["A"]
     var mockTokenIDs: [Int32] = [1]
     var contextWasSpecified = false
@@ -1038,6 +1076,7 @@ private struct ParsedBenchmarkArguments {
             sensitivityCandidateURL: sensitivityCandidateURL,
             loadOnly: loadOnly,
             coreMLLoadTarget: coreMLLoadTarget,
+            stagingPlanOnly: stagingPlanOnly,
             mockTokens: mockTokens,
             mockTokenIDs: mockTokenIDs
         )
