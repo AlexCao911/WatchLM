@@ -34,6 +34,49 @@ func makeTemporaryDirectory() throws -> URL {
     return url
 }
 
+func makeQwenStatefulTestManifest() -> ModelManifest {
+    var manifest = try! loadSampleManifest()
+    manifest.model = ModelInfo(
+        id: "Qwen/Qwen3-0.6B",
+        revision: "stateful-step-256-fp32-compute-int8",
+        parameterCount: 600_000_000,
+        role: "runtime-candidate"
+    )
+    manifest.runtime.kvCacheMode = "stateful-preferred"
+    manifest.runtime.graphSchema.interface = "stateful-step-kv"
+    manifest.runtime.graphSchema.layerCount = 28
+    manifest.runtime.graphSchema.kvHeads = 8
+    manifest.runtime.graphSchema.headDimension = 128
+    manifest.runtime.graphSchema.decode.tokenID = "input_ids"
+    manifest.runtime.graphSchema.decode.positionID = "position_ids"
+    manifest.architecture = ArchitectureInfo(
+        type: "Qwen3ForCausalLM",
+        layers: 28,
+        hiddenSize: 1024,
+        queryHeads: 16,
+        kvHeads: 8,
+        headDimension: 128,
+        maxContextTokens: 40_960,
+        tokenizer: TokenizerInfo(
+            source: "Qwen/Qwen3-0.6B",
+            preserved: true,
+            vocabularyPreserved: true,
+            chatTemplate: "qwen3-nonthinking",
+            addBosToken: false,
+            bosTokenID: 151643,
+            eosTokenIDs: [151645]
+        )
+    )
+    manifest.deviceProfiles["watch-se-2"]?.defaultContextVariant = 256
+    manifest.deviceProfiles["watch-se-3"]?.defaultContextVariant = 256
+    manifest.contextVariants = [256]
+    manifest.asset.prefillPath = "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage"
+    manifest.asset.decodePath = manifest.asset.prefillPath
+    manifest.asset.tokenizerPath = "Models/Qwen3/tokenizer.json"
+    manifest.asset.variants = nil
+    return manifest
+}
+
 func minimalTokenizerJSONData() -> Data {
     Data(
         """

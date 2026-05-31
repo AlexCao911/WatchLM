@@ -31,6 +31,24 @@ import Testing
     #expect(try ArtifactDigest.sha256Hex(for: secondPackage) != firstDigest)
 }
 
+@Test func artifactDigestFollowsSymlinkedArtifacts() throws {
+    let targetPackage = try makePackageDirectory(files: [
+        "Manifest.json": "manifest",
+        "weights/weight.bin": "weights"
+    ])
+    let linkedPackage = try temporaryDirectory()
+        .appending(path: "linked.mlpackage", directoryHint: .isDirectory)
+    try FileManager.default.createSymbolicLink(at: linkedPackage, withDestinationURL: targetPackage)
+
+    let targetTokenizer = try temporaryDirectory().appending(path: "tokenizer.json")
+    let linkedTokenizer = try temporaryDirectory().appending(path: "tokenizer.json")
+    try Data("tokenizer".utf8).write(to: targetTokenizer)
+    try FileManager.default.createSymbolicLink(at: linkedTokenizer, withDestinationURL: targetTokenizer)
+
+    #expect(try ArtifactDigest.sha256Hex(for: linkedPackage) == ArtifactDigest.sha256Hex(for: targetPackage))
+    #expect(try ArtifactDigest.sha256Hex(for: linkedTokenizer) == ArtifactDigest.sha256Hex(for: targetTokenizer))
+}
+
 @Test func modelArtifactVerifierReportsMissingAndMismatchedFiles() throws {
     let directory = try temporaryDirectory()
     let prefillURL = directory.appending(path: "prefill-256.mlpackage")

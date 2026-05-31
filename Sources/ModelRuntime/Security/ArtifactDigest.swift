@@ -3,11 +3,12 @@ import Foundation
 
 public enum ArtifactDigest {
     public static func sha256Hex(for url: URL) throws -> String {
-        if try isDirectory(url) {
-            return try directorySHA256Hex(for: url)
+        let resolvedURL = url.resolvingSymlinksInPath()
+        if try isDirectory(resolvedURL) {
+            return try directorySHA256Hex(for: resolvedURL)
         }
 
-        return try fileSHA256Hex(for: url)
+        return try fileSHA256Hex(for: resolvedURL)
     }
 
     private static func fileSHA256Hex(for fileURL: URL) throws -> String {
