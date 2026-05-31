@@ -252,6 +252,7 @@ def main() -> None:
         "modelId": args.model_id,
         "contextTokens": reported_context_tokens(args),
         "computePrecision": args.compute_precision,
+        "torchDType": args.torch_dtype,
         "graph": args.graph,
         "compression": args.compression,
         "sourceMlpackagePath": args.source_mlpackage,
@@ -269,7 +270,7 @@ def main() -> None:
         else:
             snapshot_path = run_stage(report, "download_snapshot", lambda: download_snapshot(args))
             tokenizer = run_stage(report, "load_tokenizer", lambda: load_tokenizer(snapshot_path))
-            model = run_stage(report, "load_model", lambda: load_model(snapshot_path))
+            model = run_stage(report, "load_model", lambda: load_model(snapshot_path, args.torch_dtype))
             if args.graph == "stateful-kv":
                 report["graphSchema"] = stateful_kv_graph_schema(model.config, args.context_tokens)
             elif args.graph == "stateful-step-kv":
@@ -335,6 +336,7 @@ def parse_args() -> argparse.Namespace:
         help="Compress an existing mlpackage and skip PyTorch tracing/conversion.",
     )
     parser.add_argument("--compute-precision", choices=["float16", "float32"], default="float16")
+    parser.add_argument("--torch-dtype", choices=["float16", "float32", "bfloat16", "auto"], default="float16")
     parser.add_argument("--compression", choices=["none", "int8", "int4", "mixed"], default=None)
     parser.add_argument(
         "--precision-policy",
@@ -424,16 +426,28 @@ def load_tokenizer(snapshot_path: Path):
     return AutoTokenizer.from_pretrained(snapshot_path)
 
 
-def load_model(snapshot_path: Path) -> torch.nn.Module:
+def load_model(snapshot_path: Path, torch_dtype: str = "float16") -> torch.nn.Module:
     model = AutoModelForCausalLM.from_pretrained(
         snapshot_path,
-        torch_dtype=torch.float16,
+        torch_dtype=resolve_torch_dtype(torch_dtype),
         low_cpu_mem_usage=True,
         device_map=None,
     )
     model.config._attn_implementation = "eager"
     model.eval()
     return model
+
+
+def resolve_torch_dtype(value: str):
+    if value == "auto":
+        return "auto"
+    if value == "float16":
+        return torch.float16
+    if value == "float32":
+        return torch.float32
+    if value == "bfloat16":
+        return torch.bfloat16
+    raise ValueError(f"unsupported torch dtype: {value}")
 
 
 def build_example_inputs(

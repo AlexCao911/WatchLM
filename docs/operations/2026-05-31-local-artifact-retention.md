@@ -41,6 +41,12 @@ regenerable, or already summarized in docs:
 - `artifacts/coreml/qwen3-0.6b-stateful-kv-256-fp16`
   - failed Qwen `stateful-kv` diagnostic artifact. It converted, but the Swift
     generation path failed Core ML execution-plan build with error `-14`.
+- `artifacts/coreml/qwen3-0.6b-prefill-16-*`
+  - temporary Qwen logits-only precision-isolation packages. Results are
+    recorded in `docs/benchmarks/2026-05-31-qwen-prefill-precision-isolation.md`.
+- `artifacts/coreml/qwen3-0.6b-prefill-kv-16-fp16`
+  - temporary Qwen explicit-KV diagnostic package. It reproduced the same fp16
+    drift as logits-only prefill, so the package itself is not retained.
 - `artifacts/coreml/compiled-macos-qwen3-0.6b-stateful-step-kv-256-fp16`
   - temporary compiled macOS cache for the Qwen fp16 diagnostic package.
 - `artifacts/coreml/compiled-macos-stateful-step-kv-256-int4`
@@ -62,8 +68,18 @@ artifacts:        5.6 GB
 artifacts/coreml: 2.2 GB
 artifacts/hf:     3.4 GB
 artifacts/tmp:    0 B
-free disk:        about 65 GiB
+free disk:        about 55 GiB
 ```
 
 This keeps the active Qwen watch path available while preserving one MiniCPM
 baseline and the model checkpoints needed for reproducibility.
+
+After the Qwen precision-isolation sweep, temporary context-16 Qwen prefill
+packages were removed and the retained artifact set returned to:
+
+```text
+artifacts:        5.6 GB
+artifacts/coreml: 2.2 GB
+artifacts/hf:     3.4 GB
+artifacts/tmp:    0 B
+```

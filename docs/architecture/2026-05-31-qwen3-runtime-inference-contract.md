@@ -109,3 +109,13 @@ The next graph experiment should be an explicit-KV or non-stateful Qwen sanity
 graph. If that aligns with the teacher, the fault is isolated to the Core ML
 stateful update pattern. If it does not align, the conversion wrapper or input
 contract needs to be corrected before stateful KV is revisited.
+
+## Precision Update
+
+The first non-stateful Qwen sanity graph isolated the immediate failure to Core
+ML `compute_precision=float16`. A logits-only prefill graph matches teacher
+top-k with `compute_precision=float32`, including when the Hugging Face model is
+loaded as float16 before conversion.
+
+This means Qwen needs a model-family-specific mixed compute precision route
+before stateful KV and int4 storage compression can be trusted.

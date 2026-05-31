@@ -26,12 +26,37 @@ test("real MiniCPM conversion CLI exposes compression and graph choices", async 
   assert.match(stdout, /int4/);
   assert.match(stdout, /mixed/);
   assert.match(stdout, /--precision-policy/);
+  assert.match(stdout, /--torch-dtype/);
   assert.match(stdout, /--graph/);
   assert.match(stdout, /prefill/);
   assert.match(stdout, /prefill-kv/);
   assert.match(stdout, /decode/);
   assert.match(stdout, /stateful-kv/);
   assert.match(stdout, /stateful-step-kv/);
+});
+
+test("real conversion CLI resolves model load dtype choices", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+from pathlib import Path
+import torch
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+assert module.resolve_torch_dtype("float16") is torch.float16
+assert module.resolve_torch_dtype("float32") is torch.float32
+assert module.resolve_torch_dtype("bfloat16") is torch.bfloat16
+assert module.resolve_torch_dtype("auto") == "auto"
+print("ok")
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+
+  assert.equal(stdout.trim(), "ok");
 });
 
 test("stateful KV conversion schema describes 24 Core ML state tensors", async () => {

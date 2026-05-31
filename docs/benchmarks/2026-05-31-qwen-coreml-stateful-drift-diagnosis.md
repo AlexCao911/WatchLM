@@ -173,3 +173,18 @@ global int4 quality loss
 The next useful step is to add a hard teacher-vs-CoreML top-k gate to conversion
 validation and then isolate graph correctness with a smaller explicit-KV or
 non-stateful sanity graph before resuming int4/watch SE deployment tuning.
+
+## Follow-up Precision Isolation
+
+A logits-only Qwen prefill graph at context 16 shows that Core ML can match the
+PyTorch teacher when `compute_precision=float32`. The same graph fails when
+`compute_precision=float16`, even when the model is loaded from Hugging Face as
+float32 before conversion.
+
+Detailed results are recorded in
+`docs/benchmarks/2026-05-31-qwen-prefill-precision-isolation.md`.
+
+This changes the next Qwen task from generic stateful debugging to a
+Qwen-specific mixed compute precision route: keep numerically sensitive Qwen
+subgraphs high precision first, then reintroduce int4 storage compression only
+after the fp16/fp32 mixed baseline passes teacher top-k agreement.
