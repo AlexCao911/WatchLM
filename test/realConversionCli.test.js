@@ -26,6 +26,7 @@ test("real MiniCPM conversion CLI exposes compression and graph choices", async 
   assert.match(stdout, /int4/);
   assert.match(stdout, /mixed/);
   assert.match(stdout, /--precision-policy/);
+  assert.match(stdout, /--int4-mode/);
   assert.match(stdout, /--torch-dtype/);
   assert.match(stdout, /--graph/);
   assert.match(stdout, /prefill/);
@@ -50,6 +51,28 @@ assert module.resolve_torch_dtype("float16") is torch.float16
 assert module.resolve_torch_dtype("float32") is torch.float32
 assert module.resolve_torch_dtype("bfloat16") is torch.bfloat16
 assert module.resolve_torch_dtype("auto") == "auto"
+print("ok")
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+
+  assert.equal(stdout.trim(), "ok");
+});
+
+test("global int4 compression settings can select uniform palettization", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+from pathlib import Path
+from types import SimpleNamespace
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+settings = module.global_int4_palettizer_settings(SimpleNamespace(int4_mode="uniform"))
+assert settings == {"mode": "uniform", "nbits": 4}
 print("ok")
 `], {
     cwd: repoRoot,

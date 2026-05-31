@@ -1195,6 +1195,18 @@ import CoreML
     ])
 }
 
+@Test func coreMLLogitsProcessorSuppressesTokenIDsAtOrAboveTokenizerUpperBound() throws {
+    let logits = try multiArray(shape: [1, 4], values: [0.1, 2.0, 99.0, 100.0])
+    let processor = CoreMLLogitsProcessor(topK: 3, tokenIDUpperBound: 2)
+
+    let tokenLogits = try processor.tokenLogits(from: logits)
+
+    #expect(tokenLogits == [
+        TokenLogit(tokenID: 1, logit: 2.0),
+        TokenLogit(tokenID: 0, logit: 0.1)
+    ])
+}
+
 @Test func coreMLLogitsProcessorAppliesSharedDecodePolicyToMLMultiArray() throws {
     let logits = try multiArray(shape: [1, 4], values: [8.0, 6.0, 4.0, 2.0])
     let processor = CoreMLLogitsProcessor(

@@ -19,10 +19,15 @@ public struct ChatMessage: Codable, Equatable, Sendable {
 
 public protocol TextTokenizer: Sendable {
     var endOfSequenceTokenIDs: Set<Int32> { get }
+    var decodableTokenIDUpperBound: Int32? { get }
 
     func encode(_ text: String) throws -> [Int32]
 
     func decode(tokenIDs: [Int32]) throws -> String
+}
+
+public extension TextTokenizer {
+    var decodableTokenIDUpperBound: Int32? { nil }
 }
 
 public enum MiniCPMSpecialTokens {
@@ -100,6 +105,7 @@ public enum MiniCPMTokenizerError: Error, Equatable, Sendable {
 
 public struct MiniCPMBytePairTokenizer: TextTokenizer {
     public let endOfSequenceTokenIDs: Set<Int32>
+    public let decodableTokenIDUpperBound: Int32?
 
     private let addBosToken: Bool
     private let bosTokenID: Int32
@@ -188,6 +194,8 @@ public struct MiniCPMBytePairTokenizer: TextTokenizer {
         endOfSequenceTokenIDs = eosTokenIDs
         self.vocab = vocab
         tokenByID = Dictionary(uniqueKeysWithValues: vocab.map { ($0.value, $0.key) })
+        let maxTokenID = [vocab.values.max(), addedTokenContentByID.keys.max()].compactMap { $0 }.max()
+        decodableTokenIDUpperBound = maxTokenID.map { $0 + 1 }
         self.bpeRanks = bpeRanks
         self.addedTokenByContent = addedTokenByContent
         self.addedTokenContentByID = addedTokenContentByID

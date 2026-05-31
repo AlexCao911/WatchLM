@@ -255,6 +255,7 @@ def main() -> None:
         "torchDType": args.torch_dtype,
         "graph": args.graph,
         "compression": args.compression,
+        "int4Mode": args.int4_mode if args.compression == "int4" else None,
         "sourceMlpackagePath": args.source_mlpackage,
         "legacyQuantizeFlag": args.quantize,
         "prompt": args.prompt,
@@ -294,6 +295,7 @@ def main() -> None:
                     output_dir,
                     args.compression,
                     mixed_policy,
+                    int4_mode=args.int4_mode,
                 )
                 if compression_audit is not None:
                     report["compressionAudit"] = compression_audit
@@ -338,6 +340,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--compute-precision", choices=["float16", "float32"], default="float16")
     parser.add_argument("--torch-dtype", choices=["float16", "float32", "bfloat16", "auto"], default="float16")
     parser.add_argument("--compression", choices=["none", "int8", "int4", "mixed"], default=None)
+    parser.add_argument(
+        "--int4-mode",
+        choices=["kmeans", "uniform"],
+        default="kmeans",
+        help="Palettization mode for global --compression int4.",
+    )
     parser.add_argument(
         "--precision-policy",
         default=str(DEFAULT_PRECISION_POLICY.relative_to(ROOT)),
@@ -1048,6 +1056,7 @@ def compress_coreml_package(
     output_dir: Path,
     compression: str,
     mixed_policy: dict[str, Any] | None = None,
+    int4_mode: str = "kmeans",
 ) -> tuple[Path, dict[str, Any] | None]:
     from coremltools.optimize.coreml import (
         get_weights_metadata,
@@ -1068,7 +1077,9 @@ def compress_coreml_package(
         compressed = linear_quantize_weights(model, config=config)
         compression_audit = None
     elif compression == "int4":
-        config = OptimizationConfig(global_config=OpPalettizerConfig(mode="kmeans", nbits=4))
+        config = OptimizationConfig(
+            global_config=OpPalettizerConfig(**global_int4_palettizer_settings(int4_mode))
+        )
         compressed = palettize_weights(model, config=config)
         compression_audit = None
     elif compression == "mixed":
@@ -1112,6 +1123,16 @@ def compress_coreml_package(
 
     compressed.save(str(compressed_path))
     return compressed_path, compression_audit
+
+
+def global_int4_palettizer_settings(args: Any) -> dict[str, Any]:
+    mode = getattr(args, "int4_mode", args)
+    if mode not in SUPPORTED_INT4_PALETTIZATION_MODES:
+        raise ValueError("global int4 palettization mode must be kmeans or uniform")
+    return {
+        "mode": mode,
+        "nbits": 4,
+    }
 
 
 def mixed_precision_op_name_configs(

@@ -3,13 +3,16 @@ import CoreML
 
 struct CoreMLLogitsProcessor {
     var policy: LogitsProcessor
+    var tokenIDUpperBound: Int32?
 
-    init(topK: Int? = nil) {
+    init(topK: Int? = nil, tokenIDUpperBound: Int32? = nil) {
         policy = LogitsProcessor(topK: topK)
+        self.tokenIDUpperBound = tokenIDUpperBound
     }
 
-    init(policy: LogitsProcessor) {
+    init(policy: LogitsProcessor, tokenIDUpperBound: Int32? = nil) {
         self.policy = policy
+        self.tokenIDUpperBound = tokenIDUpperBound
     }
 
     func tokenLogits(
@@ -20,7 +23,8 @@ struct CoreMLLogitsProcessor {
             throw InferenceRuntimeError.predictionFailed(message: "Logits output is empty.")
         }
 
-        let tokenLogits = (0..<logits.count).map { tokenID in
+        let effectiveCount = tokenIDUpperBound.map { max(0, min(logits.count, Int($0))) } ?? logits.count
+        let tokenLogits = (0..<effectiveCount).map { tokenID in
             TokenLogit(tokenID: Int32(tokenID), logit: logits[tokenID].doubleValue)
         }
         return try policy.process(logits: tokenLogits, generatedTokenIDs: generatedTokenIDs)

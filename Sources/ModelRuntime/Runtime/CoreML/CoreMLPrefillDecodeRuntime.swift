@@ -259,7 +259,10 @@ public final class CoreMLPrefillDecodeRuntime: StreamingInferenceRuntime, @unche
             eosTokenIDs: tokenizer.endOfSequenceTokenIDs
         )
         let logitsSampler = CoreMLLogitsSampler(
-            processor: CoreMLLogitsProcessor(policy: bundle.logitsProcessor),
+            processor: CoreMLLogitsProcessor(
+                policy: bundle.logitsProcessor,
+                tokenIDUpperBound: tokenizer.decodableTokenIDUpperBound
+            ),
             sampler: bundle.samplingStrategy.makeSampler()
         )
         let state = models.prefill.makeState()
@@ -383,7 +386,10 @@ public final class CoreMLPrefillDecodeRuntime: StreamingInferenceRuntime, @unche
             eosTokenIDs: tokenizer.endOfSequenceTokenIDs
         )
         let logitsSampler = CoreMLLogitsSampler(
-            processor: CoreMLLogitsProcessor(policy: bundle.logitsProcessor),
+            processor: CoreMLLogitsProcessor(
+                policy: bundle.logitsProcessor,
+                tokenIDUpperBound: tokenizer.decodableTokenIDUpperBound
+            ),
             sampler: bundle.samplingStrategy.makeSampler()
         )
         let state = models.prefill.makeState()
@@ -509,7 +515,10 @@ public final class CoreMLPrefillDecodeRuntime: StreamingInferenceRuntime, @unche
             eosTokenIDs: tokenizer.endOfSequenceTokenIDs
         )
         let logitsSampler = CoreMLLogitsSampler(
-            processor: CoreMLLogitsProcessor(policy: bundle.logitsProcessor),
+            processor: CoreMLLogitsProcessor(
+                policy: bundle.logitsProcessor,
+                tokenIDUpperBound: tokenizer.decodableTokenIDUpperBound
+            ),
             sampler: bundle.samplingStrategy.makeSampler()
         )
 

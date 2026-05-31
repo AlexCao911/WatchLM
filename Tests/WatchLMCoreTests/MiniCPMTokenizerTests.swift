@@ -129,6 +129,20 @@ import Testing
         198, 151667, 271, 151668, 271
     ])
 }
+
+@Test func qwen3BytePairTokenizerExposesDecodableTokenUpperBound() throws {
+    let tokenizer = try MiniCPMBytePairTokenizer(
+        tokenizerJSONURL: localQwen3TokenizerJSONURL(),
+        addBosToken: false,
+        eosTokenIDs: [151645]
+    )
+
+    #expect(tokenizer.decodableTokenIDUpperBound == 151669)
+    #expect(try tokenizer.decode(tokenIDs: [151668]) == "</think>")
+    #expect(throws: MiniCPMTokenizerError.unknownTokenID(151680)) {
+        _ = try tokenizer.decode(tokenIDs: [151680])
+    }
+}
 #endif
 
 #if os(macOS)
