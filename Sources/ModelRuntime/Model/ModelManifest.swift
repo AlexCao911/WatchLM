@@ -423,6 +423,27 @@ public struct TokenizerInfo: Codable, Equatable, Sendable {
     public var preserved: Bool
     public var vocabularyPreserved: Bool
     public var chatTemplate: String
+    public var addBosToken: Bool?
+    public var bosTokenID: Int32?
+    public var eosTokenIDs: [Int32]?
+
+    public init(
+        source: String,
+        preserved: Bool,
+        vocabularyPreserved: Bool,
+        chatTemplate: String,
+        addBosToken: Bool? = nil,
+        bosTokenID: Int32? = nil,
+        eosTokenIDs: [Int32]? = nil
+    ) {
+        self.source = source
+        self.preserved = preserved
+        self.vocabularyPreserved = vocabularyPreserved
+        self.chatTemplate = chatTemplate
+        self.addBosToken = addBosToken
+        self.bosTokenID = bosTokenID
+        self.eosTokenIDs = eosTokenIDs
+    }
 }
 
 public struct DeviceProfileConfiguration: Codable, Equatable, Sendable {

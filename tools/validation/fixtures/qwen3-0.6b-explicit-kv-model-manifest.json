@@ -47,7 +47,10 @@
       "source": "Qwen/Qwen3-0.6B",
       "preserved": true,
       "vocabularyPreserved": true,
-      "chatTemplate": "qwen3-nonthinking"
+      "chatTemplate": "qwen3-nonthinking",
+      "addBosToken": false,
+      "bosTokenID": 151643,
+      "eosTokenIDs": [151645]
     }
   },
   "deviceProfiles": {

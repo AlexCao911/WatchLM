@@ -202,6 +202,8 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
     public var configurationID: String
     public var sourceModelID: String
     public var policyID: String
+    public var manifestURL: URL?
+    public var assetBaseURL: URL?
     public var prefillModelURL: URL?
     public var decodeModelURL: URL?
     public var tokenizerURL: URL?
@@ -238,6 +240,8 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         configurationID: String = "watchlm-benchmark",
         sourceModelID: String = "openbmb/MiniCPM5-1B",
         policyID: String = "manual",
+        manifestURL: URL? = nil,
+        assetBaseURL: URL? = nil,
         prefillModelURL: URL? = nil,
         decodeModelURL: URL? = nil,
         tokenizerURL: URL? = nil,
@@ -273,6 +277,8 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
         self.configurationID = configurationID
         self.sourceModelID = sourceModelID
         self.policyID = policyID
+        self.manifestURL = manifestURL
+        self.assetBaseURL = assetBaseURL
         self.prefillModelURL = prefillModelURL
         self.decodeModelURL = decodeModelURL
         self.tokenizerURL = tokenizerURL
@@ -332,12 +338,17 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
                     .orThrowInvalid("\(argument) must be watch-se-2 or watch-se-3")
             case "--context":
                 values.contextVariant = try parsePositiveInt(value(after: argument, in: arguments, at: &index), option: argument)
+                values.contextWasSpecified = true
             case "--id":
                 values.configurationID = try value(after: argument, in: arguments, at: &index)
             case "--source-model":
                 values.sourceModelID = try value(after: argument, in: arguments, at: &index)
             case "--policy-id":
                 values.policyID = try value(after: argument, in: arguments, at: &index)
+            case "--manifest":
+                values.manifestURL = values.resolve(try value(after: argument, in: arguments, at: &index))
+            case "--asset-base":
+                values.assetBaseURL = values.resolve(try value(after: argument, in: arguments, at: &index))
             case "--prefill":
                 values.prefillModelURL = values.resolve(try value(after: argument, in: arguments, at: &index))
             case "--decode":
@@ -395,6 +406,7 @@ public struct RuntimeBenchmarkCommandOptions: Equatable, Sendable {
             }
             index += 1
         }
+        try values.applyManifestIfNeeded()
         return values.options()
     }
 }
@@ -418,6 +430,8 @@ public struct RuntimeBenchmarkCommand: Sendable {
       --device-profile watch-se-2|watch-se-3
       --context N
       --policy-id ID
+      --manifest PATH              Resolve Core ML artifact, tokenizer, graph, and tokenizer settings from a model manifest.
+      --asset-base PATH            Base directory for manifest-relative artifact paths. Defaults to the current directory.
       --id ID
       --coreml-graph-interface logits-layered-kv|stateful-kv|stateful-step-kv
       --coreml-layer-count N
@@ -885,6 +899,8 @@ private struct ParsedBenchmarkArguments {
     var configurationID = "watchlm-benchmark"
     var sourceModelID = "openbmb/MiniCPM5-1B"
     var policyID = "manual"
+    var manifestURL: URL?
+    var assetBaseURL: URL?
     var prefillModelURL: URL?
     var decodeModelURL: URL?
     var tokenizerURL: URL?
@@ -905,6 +921,7 @@ private struct ParsedBenchmarkArguments {
     var coreMLLoadTarget: CoreMLLoadTarget = .both
     var mockTokens = ["A"]
     var mockTokenIDs: [Int32] = [1]
+    var contextWasSpecified = false
     private let currentDirectory: URL
 
     init(currentDirectory: URL) {
@@ -918,6 +935,49 @@ private struct ParsedBenchmarkArguments {
             return url
         }
         return currentDirectory.appending(path: path)
+    }
+
+    mutating func applyManifestIfNeeded() throws {
+        guard let manifestURL else {
+            return
+        }
+
+        let data = try Data(contentsOf: manifestURL)
+        let manifest = try JSONDecoder().decode(ModelManifest.self, from: data)
+        let selectedArtifact = try manifest.modelArtifact(
+            for: deviceProfile,
+            requestedContextTokens: contextWasSpecified ? contextVariant : nil
+        )
+        let baseURL = assetBaseURL ?? currentDirectory
+        let graphSchema = manifest.runtime.graphSchema
+        guard let graphInterface = CoreMLBenchmarkGraphInterface(rawValue: graphSchema.interface) else {
+            throw RuntimeBenchmarkCommandError.invalidOption(
+                "--manifest runtime.graphSchema.interface must be logits-layered-kv, stateful-kv, or stateful-step-kv"
+            )
+        }
+        guard let tokenizerPath = selectedArtifact.tokenizerPath else {
+            throw RuntimeBenchmarkCommandError.invalidOption("--manifest selected artifact must include tokenizerPath")
+        }
+
+        runtime = .coreML
+        sourceModelID = manifest.model.id
+        policyID = manifest.model.revision
+        contextVariant = selectedArtifact.contextVariant
+        prefillModelURL = baseURL.appending(path: selectedArtifact.prefillPath)
+        decodeModelURL = baseURL.appending(path: selectedArtifact.decodePath)
+        tokenizerURL = baseURL.appending(path: tokenizerPath)
+        coreMLGraphInterface = graphInterface
+        coreMLLayerCount = graphSchema.layerCount
+        coreMLKVHeads = graphSchema.kvHeads
+        coreMLHeadDimension = graphSchema.headDimension
+
+        let tokenizer = manifest.architecture.tokenizer
+        tokenizerAddBOS = tokenizer.addBosToken ?? true
+        tokenizerBOSTokenID = tokenizer.bosTokenID ?? MiniCPMSpecialTokens.bosTokenID
+        tokenizerEOSTokenIDs = Set(tokenizer.eosTokenIDs ?? Array(MiniCPMSpecialTokens.eosTokenIDs))
+        if let template = RuntimeBenchmarkChatTemplate(rawValue: tokenizer.chatTemplate) {
+            chatTemplate = template
+        }
     }
 
     func options() -> RuntimeBenchmarkCommandOptions {
@@ -936,6 +996,8 @@ private struct ParsedBenchmarkArguments {
             configurationID: configurationID,
             sourceModelID: sourceModelID,
             policyID: policyID,
+            manifestURL: manifestURL,
+            assetBaseURL: assetBaseURL,
             prefillModelURL: prefillModelURL,
             decodeModelURL: decodeModelURL,
             tokenizerURL: tokenizerURL,

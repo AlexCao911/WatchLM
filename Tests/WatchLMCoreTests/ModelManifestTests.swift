@@ -310,6 +310,41 @@ import Testing
     _ = assembly.makeRuntime()
 }
 
+@Test func coreMLRuntimeAssemblerUsesQwenTokenizerSpecialTokensFromManifest() throws {
+    let assetRoot = try makeTemporaryDirectory()
+    let modelDirectory = assetRoot
+        .appending(path: "Models", directoryHint: .isDirectory)
+        .appending(path: "Qwen3", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: modelDirectory, withIntermediateDirectories: true)
+
+    let prefillURL = modelDirectory.appending(path: "prefill-kv-256-int8.mlpackage", directoryHint: .isDirectory)
+    let decodeURL = modelDirectory.appending(path: "decode-256-int8.mlpackage", directoryHint: .isDirectory)
+    let tokenizerURL = modelDirectory.appending(path: "tokenizer.json")
+    try FileManager.default.createDirectory(at: prefillURL, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: decodeURL, withIntermediateDirectories: true)
+    try Data("qwen-prefill".utf8).write(to: prefillURL.appending(path: "Manifest.json"))
+    try Data("qwen-decode".utf8).write(to: decodeURL.appending(path: "Manifest.json"))
+    try minimalTokenizerJSONData().write(to: tokenizerURL)
+
+    var manifest = try loadQwen3ExplicitKVCandidateManifest()
+    manifest.asset.variants?["256"]?.prefillSHA256 = try ArtifactDigest.sha256Hex(for: prefillURL)
+    manifest.asset.variants?["256"]?.decodeSHA256 = try ArtifactDigest.sha256Hex(for: decodeURL)
+    manifest.asset.variants?["256"]?.tokenizerSHA256 = try ArtifactDigest.sha256Hex(for: tokenizerURL)
+
+    let assembly = try CoreMLRuntimeAssembler().assemble(
+        manifest: manifest,
+        deviceProfile: .watchSE2,
+        requestedContextTokens: nil,
+        assetBaseURL: assetRoot
+    )
+
+    #expect(manifest.architecture.tokenizer.addBosToken == false)
+    #expect(manifest.architecture.tokenizer.bosTokenID == 151643)
+    #expect(manifest.architecture.tokenizer.eosTokenIDs == [151645])
+    #expect(try assembly.tokenizer.encode("Hi") == [19301])
+    #expect(assembly.tokenizer.endOfSequenceTokenIDs == [151645])
+}
+
 @Test func coreMLRuntimeAssemblerMapsManifestKVCacheModeToUpdateStrategy() throws {
     let assetRoot = try makeTemporaryDirectory()
     let modelDirectory = assetRoot

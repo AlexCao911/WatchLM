@@ -136,6 +136,9 @@ layers: 28
 kv_heads: 8
 head_dim: 128
 chat_template: qwen3-nonthinking
+add_bos_token: false
+bos_token_id: 151643
+eos_token_ids: [151645]
 watch-se-2 default context: 256
 watch-se-3 default context: 512
 ```
@@ -145,3 +148,18 @@ passing `--coreml-layer-count 28 --coreml-kv-heads 8 --coreml-head-dim 128` to
 the benchmark command. The formal manifest path can now feed
 `CoreMLPrefillDecodeBundle(graphSchema:)` with Qwen dimensions instead of
 MiniCPM defaults.
+
+The Swift assembler and benchmark command now consume the tokenizer settings
+from the manifest. `WatchLMBenchmark` can resolve the Qwen explicit-KV runtime
+candidate with:
+
+```text
+swift run WatchLMBenchmark \
+  --manifest tools/validation/fixtures/qwen3-0.6b-explicit-kv-model-manifest.json \
+  --asset-base <artifact-root> \
+  --device-profile watch-se-2
+```
+
+That path sets the Core ML graph dimensions, selected context variant, artifact
+paths, tokenizer path, BOS/EOS policy, and chat template from one source of
+truth before running the existing Swift prefill/decode/KV/sampler chain.

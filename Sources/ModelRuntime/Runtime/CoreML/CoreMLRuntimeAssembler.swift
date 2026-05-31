@@ -70,9 +70,12 @@ public struct CoreMLRuntimeAssembler: Sendable {
         let prefillModelURL = assetBaseURL.appending(path: artifact.prefillPath, directoryHint: .isDirectory)
         let decodeModelURL = assetBaseURL.appending(path: artifact.decodePath, directoryHint: .isDirectory)
         let tokenizerURL = assetBaseURL.appending(path: tokenizerPath)
+        let tokenizerInfo = manifest.architecture.tokenizer
         let tokenizer = try MiniCPMBytePairTokenizer(
             tokenizerJSONURL: tokenizerURL,
-            addBosToken: true
+            addBosToken: tokenizerInfo.addBosToken ?? true,
+            bosTokenID: tokenizerInfo.bosTokenID ?? MiniCPMSpecialTokens.bosTokenID,
+            eosTokenIDs: Set(tokenizerInfo.eosTokenIDs ?? Array(MiniCPMSpecialTokens.eosTokenIDs))
         )
         let kvCacheRouteDecision = manifest.runtime.kvCacheRouteDecision(
             capabilities: runtimeCapabilities
