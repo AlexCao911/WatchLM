@@ -119,3 +119,29 @@ loaded as float16 before conversion.
 
 This means Qwen needs a model-family-specific mixed compute precision route
 before stateful KV and int4 storage compression can be trusted.
+
+## Manifest Update
+
+The Qwen explicit-KV runtime candidate now has a Swift-tested manifest fixture:
+
+```text
+tools/validation/fixtures/qwen3-0.6b-explicit-kv-model-manifest.json
+```
+
+The fixture records the Qwen-specific graph contract directly:
+
+```text
+interface: logits-layered-kv
+layers: 28
+kv_heads: 8
+head_dim: 128
+chat_template: qwen3-nonthinking
+watch-se-2 default context: 256
+watch-se-3 default context: 512
+```
+
+This closes the architecture gap where Qwen could be run only by manually
+passing `--coreml-layer-count 28 --coreml-kv-heads 8 --coreml-head-dim 128` to
+the benchmark command. The formal manifest path can now feed
+`CoreMLPrefillDecodeBundle(graphSchema:)` with Qwen dimensions instead of
+MiniCPM defaults.

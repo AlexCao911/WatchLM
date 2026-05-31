@@ -82,6 +82,31 @@ import Testing
     #expect(se2Artifact.decodePath == se2Artifact.prefillPath)
 }
 
+@Test func qwen3ExplicitKVManifestUsesRuntimeCandidateArchitecture() throws {
+    let manifest = try loadQwen3ExplicitKVCandidateManifest()
+
+    #expect(manifest.model.id == "Qwen/Qwen3-0.6B")
+    #expect(manifest.model.role == "runtime-candidate")
+    #expect(manifest.validationErrors.isEmpty)
+    #expect(manifest.runtime.graphSchema.interface == "logits-layered-kv")
+    #expect(manifest.runtime.graphSchema.layerCount == 28)
+    #expect(manifest.runtime.graphSchema.kvHeads == 8)
+    #expect(manifest.runtime.graphSchema.headDimension == 128)
+    #expect(manifest.architecture.type == "Qwen3ForCausalLM")
+    #expect(manifest.architecture.layers == 28)
+    #expect(manifest.architecture.hiddenSize == 1024)
+    #expect(manifest.architecture.queryHeads == 16)
+    #expect(manifest.architecture.kvHeads == 8)
+    #expect(manifest.architecture.headDimension == 128)
+    #expect(manifest.architecture.tokenizer.chatTemplate == "qwen3-nonthinking")
+
+    let se2Artifact = try manifest.modelArtifact(for: .watchSE2, requestedContextTokens: nil)
+    #expect(se2Artifact.contextVariant == 256)
+    #expect(se2Artifact.prefillPath == "Models/Qwen3/prefill-kv-256-int8.mlpackage")
+    #expect(se2Artifact.decodePath == "Models/Qwen3/decode-256-int8.mlpackage")
+    #expect(se2Artifact.tokenizerPath == "Models/Qwen3/tokenizer.json")
+}
+
 @Test func selectsModelArtifactForSE2AndSE3() throws {
     let manifest = try loadSampleManifest()
 

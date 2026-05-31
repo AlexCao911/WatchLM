@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "model": {
+    "id": "Qwen/Qwen3-0.6B",
+    "revision": "explicit-kv-int8-bridge",
+    "parameterCount": 600000000,
+    "role": "runtime-candidate"
+  },
+  "runtime": {
+    "type": "coreml-mlprogram",
+    "entrypoints": ["prefill", "decode"],
+    "kvCacheMode": "slot-ring",
+    "graphSchema": {
+      "interface": "logits-layered-kv",
+      "layerCount": 28,
+      "kvHeads": 8,
+      "headDimension": 128,
+      "prefill": {
+        "inputIDs": "input_ids",
+        "positionIDs": "position_ids",
+        "causalMask": "causal_mask",
+        "logits": "logits",
+        "keyPrefix": "present_key_",
+        "valuePrefix": "present_value_"
+      },
+      "decode": {
+        "tokenID": "token_id",
+        "positionID": "position_id",
+        "causalMask": "causal_mask",
+        "logits": "logits",
+        "pastKeyPrefix": "past_key_",
+        "pastValuePrefix": "past_value_",
+        "newKeyPrefix": "new_key_",
+        "newValuePrefix": "new_value_"
+      }
+    }
+  },
+  "architecture": {
+    "type": "Qwen3ForCausalLM",
+    "layers": 28,
+    "hiddenSize": 1024,
+    "queryHeads": 16,
+    "kvHeads": 8,
+    "headDimension": 128,
+    "maxContextTokens": 40960,
+    "tokenizer": {
+      "source": "Qwen/Qwen3-0.6B",
+      "preserved": true,
+      "vocabularyPreserved": true,
+      "chatTemplate": "qwen3-nonthinking"
+    }
+  },
+  "deviceProfiles": {
+    "watch-se-2": {
+      "sip": "S8",
+      "neuralEngineCores": 2,
+      "defaultContextVariant": 256,
+      "maxNewTokens": 48
+    },
+    "watch-se-3": {
+      "sip": "S10",
+      "neuralEngineCores": 4,
+      "defaultContextVariant": 512,
+      "maxNewTokens": 64
+    }
+  },
+  "contextVariants": [256, 512],
+  "asset": {
+    "storage": "application-support",
+    "prefillPath": "Models/Qwen3/prefill-kv-512-int8.mlpackage",
+    "decodePath": "Models/Qwen3/decode-512-int8.mlpackage",
+    "tokenizerPath": "Models/Qwen3/tokenizer.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "prefillSHA256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "decodeSHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "tokenizerSHA256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "variants": {
+      "256": {
+        "deviceProfile": "watch-se-2",
+        "prefillPath": "Models/Qwen3/prefill-kv-256-int8.mlpackage",
+        "decodePath": "Models/Qwen3/decode-256-int8.mlpackage",
+        "tokenizerPath": "Models/Qwen3/tokenizer.json",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "prefillSHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "decodeSHA256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "tokenizerSHA256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "512": {
+        "deviceProfile": "watch-se-3",
+        "prefillPath": "Models/Qwen3/prefill-kv-512-int8.mlpackage",
+        "decodePath": "Models/Qwen3/decode-512-int8.mlpackage",
+        "tokenizerPath": "Models/Qwen3/tokenizer.json",
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "prefillSHA256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "decodeSHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "tokenizerSHA256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  },
+  "quantization": {
+    "strategy": "mixed-precision-fidelity-first",
+    "weights": {
+      "embedding": "int8",
+      "lmHead": "int8",
+      "norms": "fp16",
+      "attentionQKO": "int8",
+      "attentionV": "int8",
+      "ffn": "int8"
+    },
+    "kvCache": "fp16",
+    "structuralReduction": false
+  },
+  "fallbackPolicy": {
+    "requiresBenchmarkEvidence": true,
+    "order": [
+      "adjust-mixed-precision",
+      "move-to-stateful-shared-graph",
+      "reduce-context",
+      "optimize-lm-head",
+      "vocabulary-pruning-last-resort"
+    ]
+  }
+}

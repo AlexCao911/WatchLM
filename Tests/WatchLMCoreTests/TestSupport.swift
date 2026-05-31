@@ -13,6 +13,13 @@ func loadStatefulStepCandidateManifest() throws -> ModelManifest {
     return try JSONDecoder().decode(ModelManifest.self, from: data)
 }
 
+func loadQwen3ExplicitKVCandidateManifest() throws -> ModelManifest {
+    let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        .appending(path: "tools/validation/fixtures/qwen3-0.6b-explicit-kv-model-manifest.json")
+    let data = try Data(contentsOf: url)
+    return try JSONDecoder().decode(ModelManifest.self, from: data)
+}
+
 func makeTemporaryDirectory() throws -> URL {
     let url = FileManager.default.temporaryDirectory
         .appending(path: "watchlm-\(UUID().uuidString)", directoryHint: .isDirectory)
