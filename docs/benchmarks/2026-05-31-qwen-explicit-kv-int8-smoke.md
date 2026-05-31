@@ -95,3 +95,32 @@ Next direction:
 - Use int8 as the quality-preserving reference for layer-aware int4 experiments.
 - Keep explicit-KV as the correctness/debug path.
 - For SE2/SE3 deployment, move the protected precision policy back into a single shared/stateful graph after the Qwen fp16/mixed semantics are trusted.
+
+## Rerun Note
+
+After adding the Qwen manifest contract, the same int8 artifact was rerun to
+check the Swift inference chain. The historical output is reproduced when the
+benchmark uses the raw prompt format:
+
+```text
+report: artifacts/benchmarks/qwen3-0.6b-explicit-kv-16-int8-swift-smoke-rerun-raw.json
+generatedTokenIDs: [5209, 1779, 279, 11540]
+text: " Please check the notification"
+firstTokenMs: 72.661
+averageDecodeTokensPerSecond: 35.68
+peakResidentMemoryMB: 2650.23
+```
+
+The same context16 artifact with `qwen3-nonthinking` chat template generated:
+
+```text
+report: artifacts/benchmarks/qwen3-0.6b-explicit-kv-16-int8-swift-smoke-rerun-all.json
+generatedTokenIDs: [9454, 11, 323, 323]
+text: "Yes, and and"
+```
+
+Interpretation: context16 is valid as a small graph/runtime smoke, but it is too
+short for a real Qwen chat-template prompt. Qwen user-facing inference and
+quality measurements should use the context256 path, while context16 remains a
+debug artifact for graph IO, KV cache append, logits sampling, and load
+behavior.
