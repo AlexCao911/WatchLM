@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "model": {
     "id": "Qwen/Qwen3-0.6B",
-    "revision": "explicit-kv-int8-bridge",
+    "revision": "explicit-kv-256-int8-bridge",
     "parameterCount": 600000000,
     "role": "runtime-candidate"
   },

@@ -163,3 +163,25 @@ swift run WatchLMBenchmark \
 That path sets the Core ML graph dimensions, selected context variant, artifact
 paths, tokenizer path, BOS/EOS policy, and chat template from one source of
 truth before running the existing Swift prefill/decode/KV/sampler chain.
+
+## Context256 Baseline
+
+The first context256 Qwen explicit-KV int8 baseline now runs through Swift:
+
+```text
+artifacts/benchmarks/qwen3-0.6b-explicit-kv-256-int8-swift-smoke.json
+artifacts/benchmarks/qwen3-0.6b-explicit-kv-256-int8-manifest-swift-smoke.json
+```
+
+It uses the real Qwen non-thinking chat template and produces:
+
+```text
+text: "The model asset is"
+firstTokenMs: ~203-214 ms
+peak host RSS: ~2.7 GB
+```
+
+This confirms the Qwen Swift inference chain at context256, but also keeps the
+deployment blocker visible: split prefill/decode artifacts duplicate weights.
+The next watch-oriented architecture move is a single shared/stateful graph
+using this int8 baseline as the quality reference.
