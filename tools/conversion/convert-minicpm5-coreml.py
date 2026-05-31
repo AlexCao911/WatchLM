@@ -21,7 +21,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODEL_ID = "openbmb/MiniCPM5-1B"
-DEFAULT_CACHE_DIR = ROOT / "artifacts" / "hf" / "MiniCPM5-1B"
+DEFAULT_CACHE_ROOT = ROOT / "artifacts" / "hf"
 DEFAULT_PROMPT = "Apple Watch local inference test."
 DEFAULT_PRECISION_POLICY = ROOT / "tools" / "conversion" / "mixed-precision-policy.json"
 SUPPORTED_MIXED_PRECISIONS = {"fp16", "int8", "int4"}
@@ -250,6 +250,8 @@ def main() -> None:
     report_path = output_dir / "conversion-report.json"
     report: dict[str, Any] = {
         "modelId": args.model_id,
+        "cacheDir": report_path_string(resolved_cache_dir(args)),
+        "localFilesOnly": args.local_files_only,
         "contextTokens": reported_context_tokens(args),
         "computePrecision": args.compute_precision,
         "torchDType": args.torch_dtype,
@@ -323,7 +325,16 @@ def main() -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Convert real MiniCPM5 Core ML graphs.")
     parser.add_argument("--model-id", default=DEFAULT_MODEL_ID)
-    parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
+    parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Local Hugging Face snapshot directory. Defaults to artifacts/hf/<model repo name>.",
+    )
+    parser.add_argument(
+        "--local-files-only",
+        action="store_true",
+        help="Use only the local Hugging Face snapshot cache; fail instead of checking the network.",
+    )
     parser.add_argument(
         "--graph",
         choices=["prefill", "prefill-kv", "decode", "stateful-kv", "stateful-step-kv"],
@@ -385,6 +396,18 @@ def infer_context_tokens_from_path(path: str | Path) -> int | None:
     return None
 
 
+def default_cache_dir_for_model(model_id: str) -> Path:
+    repo_name = model_id.rstrip("/").split("/")[-1] or model_id
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", repo_name).strip("-")
+    return DEFAULT_CACHE_ROOT / (safe_name or "model")
+
+
+def resolved_cache_dir(args: argparse.Namespace) -> Path:
+    if args.cache_dir:
+        return resolve_repo_path(args.cache_dir)
+    return default_cache_dir_for_model(args.model_id)
+
+
 def run_stage(report: dict[str, Any], name: str, action):
     started = time.time()
     stage: dict[str, Any] = {"name": name, "status": "running"}
@@ -407,7 +430,8 @@ def run_stage(report: dict[str, Any], name: str, action):
 def download_snapshot(args: argparse.Namespace) -> Path:
     path = snapshot_download(
         repo_id=args.model_id,
-        local_dir=args.cache_dir,
+        local_dir=resolved_cache_dir(args),
+        local_files_only=args.local_files_only,
         allow_patterns=snapshot_allow_patterns(),
     )
     return Path(path)
