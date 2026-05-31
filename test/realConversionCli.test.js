@@ -82,6 +82,58 @@ print("ok")
   assert.equal(stdout.trim(), "ok");
 });
 
+test("Qwen explicit KV protected FFN int4 policy preserves attention and edge layers", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+class FakeOp:
+    def __init__(self, name):
+        self.name = name
+
+policy = module.load_mixed_precision_policy("tools/conversion/mixed-precision-policy-qwen3-explicit-kv-ffn-int4-protected.json")
+plan = module.build_mixed_compression_plan(policy)
+audit = module.new_mixed_compression_audit(policy)
+int4_selector = module.make_mixed_precision_op_selector(policy, "int4", audit)
+int8_selector = module.make_mixed_precision_op_selector(policy, "int8", audit)
+
+assert plan["policyId"] == "qwen3-explicit-kv-ffn-int4-protected"
+assert plan["layerCount"] == 28
+assert plan["protectedEdgeLayerCount"] == 4
+assert plan["compressionPasses"][1]["settings"]["mode"] == "uniform"
+assert plan["kvCachePrecision"] == "fp16"
+
+assert not int4_selector(FakeOp("model_model_layers_0_mlp_down_proj_weight"))
+assert int8_selector(FakeOp("model_model_layers_0_mlp_down_proj_weight"))
+assert int4_selector(FakeOp("model_model_layers_4_mlp_gate_proj_weight"))
+assert int4_selector(FakeOp("model_model_layers_12_mlp_up_proj_weight"))
+assert int4_selector(FakeOp("model_model_layers_23_mlp_down_proj_weight"))
+assert not int4_selector(FakeOp("model_model_layers_24_mlp_down_proj_weight"))
+assert int8_selector(FakeOp("model_model_layers_24_mlp_down_proj_weight"))
+assert not int4_selector(FakeOp("model_model_layers_12_self_attn_q_proj_weight"))
+assert int8_selector(FakeOp("model_model_layers_12_self_attn_q_proj_weight"))
+assert int8_selector(FakeOp("model_model_layers_12_self_attn_v_proj_weight"))
+
+print(json.dumps({"plan": plan, "audit": audit}, sort_keys=True))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const { plan, audit } = JSON.parse(stdout);
+
+  assert.deepEqual(plan.compressionPasses.map((pass) => pass.precision), ["int8", "int4"]);
+  assert.equal(audit.passes.int4.selectedByComponent.ffn, 3);
+  assert.equal(audit.passes.int8.selectedByComponent.ffn, 2);
+  assert.equal(audit.passes.int8.selectedByComponent.attentionQKO, 1);
+  assert.equal(audit.passes.int8.selectedByComponent.attentionV, 1);
+});
+
 test("decode Core ML input types preserve past KV tensor dtype", async () => {
   const { stdout } = await execFileAsync(python, ["-c", `
 import importlib.util
