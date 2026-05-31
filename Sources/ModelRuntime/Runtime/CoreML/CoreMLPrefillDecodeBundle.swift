@@ -165,11 +165,33 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
         decodeModelURL: URL,
         maxPromptTokens: Int
     ) -> CoreMLPrefillDecodeBundle {
+        layeredKV(
+            prefillModelURL: prefillModelURL,
+            decodeModelURL: decodeModelURL,
+            maxPromptTokens: maxPromptTokens,
+            layerCount: 24,
+            kvHeads: 2,
+            headDimension: 128
+        )
+    }
+
+    public static func layeredKV(
+        prefillModelURL: URL,
+        decodeModelURL: URL,
+        maxPromptTokens: Int,
+        layerCount: Int,
+        kvHeads: Int,
+        headDimension: Int
+    ) -> CoreMLPrefillDecodeBundle {
         CoreMLPrefillDecodeBundle(
             prefillModelURL: prefillModelURL,
             decodeModelURL: decodeModelURL,
             maxPromptTokens: maxPromptTokens,
-            graphInterface: .logitsAndLayeredKV(layerCount: 24, kvHeads: 2, headDimension: 128),
+            graphInterface: .logitsAndLayeredKV(
+                layerCount: layerCount,
+                kvHeads: kvHeads,
+                headDimension: headDimension
+            ),
             decodeTokenInputName: "token_id"
         )
     }
@@ -538,6 +560,7 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
             )
         case .logitsAndLayeredKV(let layerCount, _, _):
             let floatingLogits: [MLMultiArrayDataType] = [.float16, .float32, .double]
+            let floatingKV: [MLMultiArrayDataType] = [.float16, .float32]
             var prefillOutputs: [String: [MLMultiArrayDataType]] = [
                 prefillLogitsOutputName: floatingLogits
             ]
@@ -551,12 +574,12 @@ public struct CoreMLPrefillDecodeBundle: Sendable {
             ]
 
             for layer in 0..<layerCount {
-                prefillOutputs[prefillKeyOutputName(forLayer: layer)] = [.float16]
-                prefillOutputs[prefillValueOutputName(forLayer: layer)] = [.float16]
-                decodeInputs[decodePastKeyInputName(forLayer: layer)] = [.float16]
-                decodeInputs[decodePastValueInputName(forLayer: layer)] = [.float16]
-                decodeOutputs[decodeNewKeyOutputName(forLayer: layer)] = [.float16]
-                decodeOutputs[decodeNewValueOutputName(forLayer: layer)] = [.float16]
+                prefillOutputs[prefillKeyOutputName(forLayer: layer)] = floatingKV
+                prefillOutputs[prefillValueOutputName(forLayer: layer)] = floatingKV
+                decodeInputs[decodePastKeyInputName(forLayer: layer)] = floatingKV
+                decodeInputs[decodePastValueInputName(forLayer: layer)] = floatingKV
+                decodeOutputs[decodeNewKeyOutputName(forLayer: layer)] = floatingKV
+                decodeOutputs[decodeNewValueOutputName(forLayer: layer)] = floatingKV
             }
 
             return (

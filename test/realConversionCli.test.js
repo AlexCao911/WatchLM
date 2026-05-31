@@ -59,6 +59,41 @@ print("ok")
   assert.equal(stdout.trim(), "ok");
 });
 
+test("decode Core ML input types preserve past KV tensor dtype", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+from pathlib import Path
+from types import SimpleNamespace
+import torch
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+config = SimpleNamespace(num_hidden_layers=1)
+example_inputs = (
+    torch.zeros((1, 1), dtype=torch.int32),
+    torch.zeros((1, 1), dtype=torch.int32),
+    torch.zeros((1, 1, 1, 17), dtype=torch.float16),
+    torch.zeros((1, 8, 16, 128), dtype=torch.float32),
+    torch.zeros((1, 8, 16, 128), dtype=torch.float32),
+)
+types = module.input_types("decode", example_inputs, config, 16)
+past_key = next(item for item in types if item.name == "past_key_0")
+past_value = next(item for item in types if item.name == "past_value_0")
+assert past_key.dtype is not None
+assert past_key.dtype.__name__ == "fp32"
+assert past_value.dtype.__name__ == "fp32"
+print("ok")
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+
+  assert.equal(stdout.trim(), "ok");
+});
+
 test("stateful KV conversion schema describes 24 Core ML state tensors", async () => {
   const { stdout } = await execFileAsync(python, ["-c", `
 import importlib.util

@@ -634,6 +634,59 @@ import CoreML
     #expect(bundle.decodeNewValueOutputName(forLayer: 3) == "new_value_3")
 }
 
+@Test func runtimeCandidateExplicitKVBundleUsesConfiguredGraphDimensions() throws {
+    let bundle = CoreMLPrefillDecodeBundle.layeredKV(
+        prefillModelURL: URL(fileURLWithPath: "/tmp/qwen-prefill.mlpackage"),
+        decodeModelURL: URL(fileURLWithPath: "/tmp/qwen-decode.mlpackage"),
+        maxPromptTokens: 16,
+        layerCount: 28,
+        kvHeads: 8,
+        headDimension: 128
+    )
+
+    #expect(bundle.graphInterface == .logitsAndLayeredKV(layerCount: 28, kvHeads: 8, headDimension: 128))
+    #expect(bundle.decodeTokenInputName == "token_id")
+    #expect(bundle.prefillKeyOutputName(forLayer: 27) == "present_key_27")
+    #expect(bundle.decodePastKeyInputName(forLayer: 27) == "past_key_27")
+    #expect(bundle.decodeNewValueOutputName(forLayer: 27) == "new_value_27")
+}
+
+@Test func runtimeCandidateExplicitKVBundleAcceptsFloat32KVForPrecisionBaselines() throws {
+    let bundle = CoreMLPrefillDecodeBundle.layeredKV(
+        prefillModelURL: URL(fileURLWithPath: "/tmp/qwen-prefill.mlpackage"),
+        decodeModelURL: URL(fileURLWithPath: "/tmp/qwen-decode.mlpackage"),
+        maxPromptTokens: 16,
+        layerCount: 1,
+        kvHeads: 8,
+        headDimension: 128
+    )
+
+    try bundle.validateGraphIOContract(
+        prefillInputDataTypes: [
+            "input_ids": .int32,
+            "position_ids": .int32,
+            "causal_mask": .float16
+        ],
+        prefillOutputDataTypes: [
+            "logits": .float32,
+            "present_key_0": .float32,
+            "present_value_0": .float32
+        ],
+        decodeInputDataTypes: [
+            "token_id": .int32,
+            "position_id": .int32,
+            "causal_mask": .float16,
+            "past_key_0": .float32,
+            "past_value_0": .float32
+        ],
+        decodeOutputDataTypes: [
+            "logits": .float32,
+            "new_key_0": .float32,
+            "new_value_0": .float32
+        ]
+    )
+}
+
 @Test func coreMLStatefulKVBundleRequiresOnlyTokenAndLogitsIO() throws {
     var manifest = try loadSampleManifest()
     manifest.runtime.graphSchema.interface = "stateful-kv"

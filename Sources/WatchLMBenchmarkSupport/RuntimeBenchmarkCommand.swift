@@ -711,10 +711,13 @@ public struct RuntimeBenchmarkCommand: Sendable {
         let decodeURL = try resolvedCoreMLDecodeURL(prefillURL: prefillURL)
         switch options.coreMLGraphInterface {
         case .explicitKV:
-            return CoreMLPrefillDecodeBundle.miniCPMExplicitKV(
+            return CoreMLPrefillDecodeBundle.layeredKV(
                 prefillModelURL: prefillURL,
                 decodeModelURL: decodeURL,
-                maxPromptTokens: options.contextVariant
+                maxPromptTokens: options.contextVariant,
+                layerCount: options.coreMLLayerCount,
+                kvHeads: options.coreMLKVHeads,
+                headDimension: options.coreMLHeadDimension
             )
         case .statefulKV:
             return CoreMLPrefillDecodeBundle(

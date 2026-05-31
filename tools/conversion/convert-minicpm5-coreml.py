@@ -649,9 +649,17 @@ def input_types(
     for index in range(num_hidden_layers):
         key = past_key_values[index * 2]
         value = past_key_values[index * 2 + 1]
-        types.append(ct.TensorType(name=f"past_key_{index}", shape=tuple(key.shape), dtype=np.float16))
-        types.append(ct.TensorType(name=f"past_value_{index}", shape=tuple(value.shape), dtype=np.float16))
+        types.append(ct.TensorType(name=f"past_key_{index}", shape=tuple(key.shape), dtype=coreml_numpy_dtype(key)))
+        types.append(ct.TensorType(name=f"past_value_{index}", shape=tuple(value.shape), dtype=coreml_numpy_dtype(value)))
     return types
+
+
+def coreml_numpy_dtype(tensor: torch.Tensor) -> Any:
+    if tensor.dtype == torch.float16:
+        return np.float16
+    if tensor.dtype == torch.float32:
+        return np.float32
+    raise ValueError(f"unsupported Core ML tensor dtype: {tensor.dtype}")
 
 
 def output_types(graph: str, num_hidden_layers: int) -> list[ct.TensorType]:
