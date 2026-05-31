@@ -107,6 +107,39 @@ import Testing
     #expect(se2Artifact.tokenizerPath == "Models/Qwen3/tokenizer.json")
 }
 
+@Test func qwen3StatefulStepManifestUsesSharedContext256ArtifactForSE2AndSE3() throws {
+    let manifest = try loadQwen3StatefulStepCandidateManifest()
+    let se2Artifact = try manifest.modelArtifact(for: .watchSE2, requestedContextTokens: nil)
+    let se3Artifact = try manifest.modelArtifact(for: .watchSE3, requestedContextTokens: nil)
+    let watchOS11 = CoreMLRuntimeCapabilities(
+        platform: .watchOS,
+        operatingSystemVersion: OperatingSystemVersion(majorVersion: 11, minorVersion: 0, patchVersion: 0)
+    )
+
+    #expect(manifest.model.id == "Qwen/Qwen3-0.6B")
+    #expect(manifest.model.role == "runtime-candidate")
+    #expect(manifest.validationErrors.isEmpty)
+    #expect(manifest.runtime.graphSchema.interface == "stateful-step-kv")
+    #expect(manifest.runtime.kvCacheRouteDecision(capabilities: watchOS11).selectedRoute == .statefulKV)
+    #expect(manifest.runtime.graphSchema.layerCount == 28)
+    #expect(manifest.runtime.graphSchema.kvHeads == 8)
+    #expect(manifest.runtime.graphSchema.headDimension == 128)
+    #expect(manifest.runtime.graphSchema.decode.tokenID == "input_ids")
+    #expect(manifest.runtime.graphSchema.decode.positionID == "position_ids")
+    #expect(manifest.architecture.tokenizer.chatTemplate == "qwen3-nonthinking")
+    #expect(manifest.architecture.tokenizer.addBosToken == false)
+    #expect(manifest.architecture.tokenizer.eosTokenIDs == [151645])
+
+    #expect(se2Artifact.contextVariant == 256)
+    #expect(se3Artifact.contextVariant == 256)
+    #expect(se2Artifact.prefillPath == "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage")
+    #expect(se2Artifact.decodePath == se2Artifact.prefillPath)
+    #expect(se3Artifact.prefillPath == se2Artifact.prefillPath)
+    #expect(se3Artifact.decodePath == se2Artifact.prefillPath)
+    #expect(se2Artifact.tokenizerPath == "Models/Qwen3/tokenizer.json")
+    #expect(se3Artifact.tokenizerPath == "Models/Qwen3/tokenizer.json")
+}
+
 @Test func selectsModelArtifactForSE2AndSE3() throws {
     let manifest = try loadSampleManifest()
 
@@ -341,6 +374,53 @@ import Testing
     #expect(manifest.architecture.tokenizer.addBosToken == false)
     #expect(manifest.architecture.tokenizer.bosTokenID == 151643)
     #expect(manifest.architecture.tokenizer.eosTokenIDs == [151645])
+    #expect(try assembly.tokenizer.encode("Hi") == [19301])
+    #expect(assembly.tokenizer.endOfSequenceTokenIDs == [151645])
+}
+
+@Test func coreMLRuntimeAssemblerBuildsQwenStatefulStepRuntimeComponents() throws {
+    let assetRoot = try makeTemporaryDirectory()
+    let modelDirectory = assetRoot
+        .appending(path: "Models", directoryHint: .isDirectory)
+        .appending(path: "Qwen3", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: modelDirectory, withIntermediateDirectories: true)
+
+    let statefulURL = modelDirectory
+        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlpackage", directoryHint: .isDirectory)
+    let tokenizerURL = modelDirectory.appending(path: "tokenizer.json")
+    try FileManager.default.createDirectory(at: statefulURL, withIntermediateDirectories: true)
+    try Data("qwen-stateful-step".utf8).write(to: statefulURL.appending(path: "Manifest.json"))
+    try minimalTokenizerJSONData().write(to: tokenizerURL)
+
+    var manifest = try loadQwen3StatefulStepCandidateManifest()
+    manifest.asset.prefillSHA256 = try ArtifactDigest.sha256Hex(for: statefulURL)
+    manifest.asset.decodeSHA256 = try ArtifactDigest.sha256Hex(for: statefulURL)
+    manifest.asset.tokenizerSHA256 = try ArtifactDigest.sha256Hex(for: tokenizerURL)
+
+    let assembly = try CoreMLRuntimeAssembler().assemble(
+        manifest: manifest,
+        deviceProfile: .watchSE2,
+        requestedContextTokens: nil,
+        assetBaseURL: assetRoot,
+        runtimeCapabilities: CoreMLRuntimeCapabilities(
+            platform: .watchOS,
+            operatingSystemVersion: OperatingSystemVersion(majorVersion: 11, minorVersion: 0, patchVersion: 0)
+        )
+    )
+
+    #expect(assembly.artifact.contextVariant == 256)
+    #expect(assembly.artifact.deviceProfile == "watch-se-2")
+    #expect(assembly.verificationReport.isReady)
+    #expect(assembly.prefillModelURL == statefulURL)
+    #expect(assembly.decodeModelURL == statefulURL)
+    #expect(assembly.tokenizerURL == tokenizerURL)
+    #expect(assembly.bundle.maxPromptTokens == 256)
+    #expect(assembly.bundle.graphInterface == .statefulStepKV(layerCount: 28, kvHeads: 8, headDimension: 128))
+    #expect(assembly.bundle.requiresSharedStatefulModel)
+    #expect(assembly.bundle.decodeTokenInputName == "input_ids")
+    #expect(assembly.bundle.decodePositionInputName == "position_ids")
+    #expect(assembly.kvCacheRouteDecision.selectedRoute == .statefulKV)
+    #expect(assembly.bundle.kvCacheUpdateStrategy == .slotRing)
     #expect(try assembly.tokenizer.encode("Hi") == [19301])
     #expect(assembly.tokenizer.endOfSequenceTokenIDs == [151645])
 }
