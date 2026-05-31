@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "source": "qwen3-stateful-step-fp32-compute-int8-golden",
+  "references": [
+    {
+      "promptID": "watch-utility-002",
+      "tokenIDs": [
+        785,
+        1614,
+        9329,
+        374
+      ]
+    }
+  ]
+}
