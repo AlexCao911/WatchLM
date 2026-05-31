@@ -134,6 +134,68 @@ print(json.dumps({"plan": plan, "audit": audit}, sort_keys=True))
   assert.equal(audit.passes.int8.selectedByComponent.attentionV, 1);
 });
 
+test("Qwen explicit KV split FFN policies isolate down and gate-up int4 probes", async () => {
+  const { stdout } = await execFileAsync(python, ["-c", `
+import importlib.util
+import json
+from pathlib import Path
+
+script = Path("tools/conversion/convert-minicpm5-coreml.py").resolve()
+spec = importlib.util.spec_from_file_location("convert_minicpm5_coreml", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+class FakeOp:
+    def __init__(self, name):
+        self.name = name
+
+down_policy = module.load_mixed_precision_policy("tools/conversion/mixed-precision-policy-qwen3-explicit-kv-ffn-down-low4-int4.json")
+gate_policy = module.load_mixed_precision_policy("tools/conversion/mixed-precision-policy-qwen3-explicit-kv-ffn-gateup-low4-int4.json")
+down_plan = module.build_mixed_compression_plan(down_policy)
+gate_plan = module.build_mixed_compression_plan(gate_policy)
+down_audit = module.new_mixed_compression_audit(down_policy)
+gate_audit = module.new_mixed_compression_audit(gate_policy)
+down_int4 = module.make_mixed_precision_op_selector(down_policy, "int4", down_audit)
+down_int8 = module.make_mixed_precision_op_selector(down_policy, "int8", down_audit)
+gate_int4 = module.make_mixed_precision_op_selector(gate_policy, "int4", gate_audit)
+gate_int8 = module.make_mixed_precision_op_selector(gate_policy, "int8", gate_audit)
+
+assert down_plan["policyId"] == "qwen3-explicit-kv-ffn-down-low4-int4"
+assert gate_plan["policyId"] == "qwen3-explicit-kv-ffn-gateup-low4-int4"
+assert down_plan["layerCount"] == 28
+assert gate_plan["layerCount"] == 28
+assert down_plan["compressionPasses"][1]["settings"]["mode"] == "uniform"
+assert gate_plan["compressionPasses"][1]["settings"]["mode"] == "uniform"
+
+assert down_int4(FakeOp("model_model_layers_6_mlp_down_proj_weight"))
+assert down_int4(FakeOp("model_model_layers_10_mlp_down_proj_weight"))
+assert not down_int4(FakeOp("model_model_layers_6_mlp_gate_proj_weight"))
+assert down_int8(FakeOp("model_model_layers_6_mlp_gate_proj_weight"))
+assert down_int8(FakeOp("model_model_layers_6_self_attn_q_proj_weight"))
+assert not down_int4(FakeOp("model_model_layers_11_mlp_down_proj_weight"))
+
+assert gate_int4(FakeOp("model_model_layers_5_mlp_gate_proj_weight"))
+assert gate_int4(FakeOp("model_model_layers_7_mlp_up_proj_weight"))
+assert not gate_int4(FakeOp("model_model_layers_7_mlp_down_proj_weight"))
+assert gate_int8(FakeOp("model_model_layers_7_mlp_down_proj_weight"))
+assert gate_int8(FakeOp("model_model_layers_7_self_attn_v_proj_weight"))
+assert not gate_int4(FakeOp("model_model_layers_8_mlp_gate_proj_weight"))
+
+print(json.dumps({"down": down_audit, "gate": gate_audit}, sort_keys=True))
+`], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024
+  });
+  const { down, gate } = JSON.parse(stdout);
+
+  assert.equal(down.passes.int4.selectedByComponent.ffnDown, 2);
+  assert.equal(down.passes.int8.selectedByComponent.ffnGateUp, 1);
+  assert.equal(down.passes.int8.selectedByComponent.attentionQKO, 1);
+  assert.equal(gate.passes.int4.selectedByComponent.ffnGateUp, 2);
+  assert.equal(gate.passes.int8.selectedByComponent.ffnDown, 1);
+  assert.equal(gate.passes.int8.selectedByComponent.attentionV, 1);
+});
+
 test("decode Core ML input types preserve past KV tensor dtype", async () => {
   const { stdout } = await execFileAsync(python, ["-c", `
 import importlib.util

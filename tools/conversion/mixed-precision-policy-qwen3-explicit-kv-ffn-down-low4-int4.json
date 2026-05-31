@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "policyId": "qwen3-explicit-kv-ffn-down-low4-int4",
+  "strategy": "mixed-precision-fidelity-first",
+  "layerCount": 28,
+  "protectedEdgeLayerCount": 0,
+  "weights": {
+    "embedding": "int8",
+    "lmHead": "int8",
+    "norms": "fp16",
+    "attentionQKO": "int8",
+    "attentionV": "int8",
+    "ffn": "int8"
+  },
+  "kvCache": "fp16",
+  "structuralReduction": false,
+  "layerOverrides": {
+    "ffnDown": {
+      "6": "int4",
+      "7": "int4",
+      "9": "int4",
+      "10": "int4"
+    }
+  },
+  "int4Compression": {
+    "method": "palettization",
+    "mode": "uniform",
+    "granularity": "per_tensor",
+    "groupSize": 32,
+    "enablePerChannelScale": false,
+    "clusterDim": 1,
+    "numKMeansWorkers": 1,
+    "weightThreshold": 2048
+  },
+  "opNamePatterns": {
+    "norms": [
+      "input_layernorm",
+      "post_attention_layernorm",
+      "q_norm",
+      "k_norm",
+      "norm"
+    ]
+  }
+}
