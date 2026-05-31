@@ -7,6 +7,7 @@ import { summarizeBenchmarkReport, validateBenchmarkReport } from "../benchmark/
 import {
   assertValidModelCandidateSuite,
   evaluateModelCandidate,
+  recommendModelCandidates,
   summarizeCandidateEvaluation
 } from "./modelCandidateSizing.js";
 import { assertValidModelManifest, summarizeModelManifest } from "./modelManifest.js";
@@ -104,8 +105,13 @@ async function validateCandidatesCommand(args) {
   const summaries = suite.candidates
     .map((candidate) => summarizeCandidateEvaluation(evaluateModelCandidate(candidate, "watch-se-2")));
   const passing = summaries.filter((summary) => summary.gatePass).length;
+  const recommendations = recommendModelCandidates(suite, "watch-se-2");
+  const next = recommendations.find((summary) => summary.recommendation === "convert-next");
 
   console.log(`candidates ok: ${summaries.length} candidates, ${passing} passing SE2 gate`);
+  if (next) {
+    console.log(`recommended next: ${next.id} (${next.sourceModelId})`);
+  }
   for (const summary of summaries) {
     const status = summary.gatePass ? "pass" : "fail";
     console.log(

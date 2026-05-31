@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   evaluateModelCandidate,
+  recommendModelCandidates,
   summarizeCandidateEvaluation,
   validateModelCandidateSuite
 } from "../tools/validation/modelCandidateSizing.js";
@@ -25,7 +26,7 @@ test("model candidate fixture validates and keeps the 1B baseline as teacher-onl
   const result = validateModelCandidateSuite(fixture);
 
   assert.equal(result.ok, true, result.errors.join("\n"));
-  assert.equal(fixture.candidates.length, 3);
+  assert.equal(fixture.candidates.length, 6);
 
   const baseline = fixture.candidates.find((candidate) => candidate.id === "minicpm5-1b-v-low8");
   const evaluation = evaluateModelCandidate(baseline, "watch-se-2");
@@ -49,7 +50,11 @@ test("distilled 350M int4 candidate passes SE2 context-256 planning gate", () =>
 
   assert.deepEqual(summarizeCandidateEvaluation(evaluation), {
     id: "distilled-watchlm-350m-int4",
+    sourceModelId: "watchlm/distilled-350m",
     role: "runtime-candidate",
+    modelFamily: "watchlm-distilled",
+    conversionPriority: 3,
+    conversionRisk: "low",
     deviceProfile: "watch-se-2",
     contextTokens: 256,
     parameterCountMillions: 350,
@@ -67,6 +72,21 @@ test("candidate gate rejects a 600M int4 candidate that exceeds SE2 RSS budget",
   assert.equal(evaluation.gate.ok, false);
   assert.match(evaluation.gate.failures.join("\n"), /estimated peak RSS 927MB exceeds 850MB SE2 planning budget/);
   assert.equal(evaluation.estimates.artifactMB, 385);
+});
+
+test("candidate recommendation prioritizes an advanced Qwen3 0.6B text model before riskier stretch models", () => {
+  const recommendations = recommendModelCandidates(fixture, "watch-se-2");
+
+  assert.equal(recommendations[0].id, "qwen3-0.6b-int4");
+  assert.equal(recommendations[0].sourceModelId, "Qwen/Qwen3-0.6B");
+  assert.equal(recommendations[0].recommendation, "convert-next");
+  assert.equal(recommendations[0].gatePass, true);
+  assert.equal(recommendations[0].conversionRisk, "medium");
+
+  const qwen35 = recommendations.find((item) => item.id === "qwen3.5-0.8b-text-only-int4");
+  assert.equal(qwen35.recommendation, "stretch");
+  assert.equal(qwen35.gatePass, false);
+  assert.equal(qwen35.conversionRisk, "high");
 });
 
 test("candidate validation reports schema errors together", () => {

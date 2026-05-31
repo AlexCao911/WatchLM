@@ -79,6 +79,9 @@ export function evaluateModelCandidate(candidate, deviceProfile = "watch-se-2") 
     id: candidate.id,
     sourceModelId: candidate.sourceModelId,
     role: candidate.role,
+    conversionPriority: candidate.conversionPriority,
+    conversionRisk: candidate.conversionRisk ?? "unknown",
+    modelFamily: candidate.modelFamily,
     deviceProfile,
     contextTokens: candidate.contextTokens,
     architecture: candidate.architecture,
@@ -98,7 +101,11 @@ export function evaluateModelCandidate(candidate, deviceProfile = "watch-se-2") 
 export function summarizeCandidateEvaluation(evaluation) {
   return {
     id: evaluation.id,
+    sourceModelId: evaluation.sourceModelId,
     role: evaluation.role,
+    modelFamily: evaluation.modelFamily,
+    conversionPriority: evaluation.conversionPriority,
+    conversionRisk: evaluation.conversionRisk,
     deviceProfile: evaluation.deviceProfile,
     contextTokens: evaluation.contextTokens,
     parameterCountMillions: Math.round(evaluation.architecture.parameterCount / 1_000_000),
@@ -107,6 +114,27 @@ export function summarizeCandidateEvaluation(evaluation) {
     peakRSSMB: evaluation.estimates.peakRSSMB,
     gatePass: evaluation.gate.ok
   };
+}
+
+export function recommendModelCandidates(suite, deviceProfile = "watch-se-2") {
+  assertValidModelCandidateSuite(suite);
+
+  const summaries = suite.candidates
+    .filter((candidate) => candidate.role === "runtime-candidate")
+    .map((candidate) => summarizeCandidateEvaluation(evaluateModelCandidate(candidate, deviceProfile)))
+    .sort(compareCandidateSummaries);
+
+  let nextAssigned = false;
+  return summaries.map((summary) => {
+    if (!summary.gatePass) {
+      return { ...summary, recommendation: "stretch" };
+    }
+    if (!nextAssigned) {
+      nextAssigned = true;
+      return { ...summary, recommendation: "convert-next" };
+    }
+    return { ...summary, recommendation: "candidate" };
+  });
 }
 
 function estimateModelCandidate(candidate) {
@@ -171,6 +199,15 @@ function validateCandidate(candidate, index, errors) {
   if (!isNonEmptyString(candidate.sourceModelId)) {
     errors.push(`${prefix}.sourceModelId must be a non-empty string`);
   }
+  if (candidate.sourceURL !== undefined && !isNonEmptyString(candidate.sourceURL)) {
+    errors.push(`${prefix}.sourceURL must be a non-empty string when provided`);
+  }
+  if (candidate.conversionRisk !== undefined && !["low", "medium", "high"].includes(candidate.conversionRisk)) {
+    errors.push(`${prefix}.conversionRisk must be low, medium, or high when provided`);
+  }
+  if (candidate.conversionPriority !== undefined && !isPositiveNumber(candidate.conversionPriority)) {
+    errors.push(`${prefix}.conversionPriority must be a positive number when provided`);
+  }
   if (!SUPPORTED_CANDIDATE_ROLES.includes(candidate.role)) {
     errors.push(`${prefix}.role must be teacher-baseline or runtime-candidate`);
   }
@@ -203,6 +240,41 @@ function validateCandidate(candidate, index, errors) {
   }
   if (candidate.architecture.parameterCount !== candidate.parameterCount) {
     errors.push(`${prefix}.architecture.parameterCount must match parameterCount`);
+  }
+}
+
+function compareCandidateSummaries(left, right) {
+  if (left.gatePass !== right.gatePass) {
+    return left.gatePass ? -1 : 1;
+  }
+
+  const leftPriority = left.conversionPriority ?? Number.MAX_SAFE_INTEGER;
+  const rightPriority = right.conversionPriority ?? Number.MAX_SAFE_INTEGER;
+  if (leftPriority !== rightPriority) {
+    return leftPriority - rightPriority;
+  }
+
+  if (left.conversionRisk !== right.conversionRisk) {
+    return riskScore(left.conversionRisk) - riskScore(right.conversionRisk);
+  }
+
+  if (left.peakRSSMB !== right.peakRSSMB) {
+    return left.peakRSSMB - right.peakRSSMB;
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
+function riskScore(risk) {
+  switch (risk) {
+    case "low":
+      return 0;
+    case "medium":
+      return 1;
+    case "high":
+      return 2;
+    default:
+      return 3;
   }
 }
 

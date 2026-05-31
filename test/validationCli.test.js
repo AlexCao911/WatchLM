@@ -84,8 +84,11 @@ test("validates model candidate sizing fixtures", () => {
   const result = runCli(["candidates", candidatesPath]);
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /candidates ok: 3 candidates, 1 passing SE2 gate/);
+  assert.match(result.stdout, /candidates ok: 6 candidates, 3 passing SE2 gate/);
+  assert.match(result.stdout, /recommended next: qwen3-0.6b-int4 \(Qwen\/Qwen3-0.6B\)/);
   assert.match(result.stdout, /distilled-watchlm-350m-int4: pass/);
+  assert.match(result.stdout, /qwen3-0.6b-int4: pass/);
+  assert.match(result.stdout, /qwen3.5-0.8b-text-only-int4: fail/);
   assert.match(result.stdout, /minicpm5-1b-v-low8: fail/);
 });
 
