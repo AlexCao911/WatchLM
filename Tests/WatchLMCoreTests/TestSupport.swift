@@ -70,7 +70,7 @@ func makeQwenStatefulTestManifest() -> ModelManifest {
     manifest.deviceProfiles["watch-se-2"]?.defaultContextVariant = 256
     manifest.deviceProfiles["watch-se-3"]?.defaultContextVariant = 256
     manifest.contextVariants = [256]
-    manifest.asset.prefillPath = "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage"
+    manifest.asset.prefillPath = "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlmodelc"
     manifest.asset.decodePath = manifest.asset.prefillPath
     manifest.asset.tokenizerPath = "Models/Qwen3/tokenizer.json"
     manifest.asset.variants = nil

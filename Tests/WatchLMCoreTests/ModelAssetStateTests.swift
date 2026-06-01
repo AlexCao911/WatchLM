@@ -33,7 +33,7 @@ import Testing
         .appending(path: "Models", directoryHint: .isDirectory)
         .appending(path: "Qwen3", directoryHint: .isDirectory)
     let statefulURL = modelDirectory
-        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlpackage", directoryHint: .isDirectory)
+        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlmodelc", directoryHint: .isDirectory)
     let tokenizerURL = modelDirectory.appending(path: "tokenizer.json")
     try FileManager.default.createDirectory(at: statefulURL, withIntermediateDirectories: true)
     try Data("qwen-stateful".utf8).write(to: statefulURL.appending(path: "Manifest.json"))
@@ -64,7 +64,7 @@ import Testing
     #expect(loadedManifest.model.id == "Qwen/Qwen3-0.6B")
     #expect(installedState == .installed(manifest: loadedManifest))
     #expect(selectedArtifact.contextVariant == 256)
-    #expect(selectedArtifact.prefillPath == "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage")
+    #expect(selectedArtifact.prefillPath == "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlmodelc")
     #expect(selectedArtifact.decodePath == selectedArtifact.prefillPath)
     #expect(store.url(for: selectedArtifact.prefillPath).standardizedFileURL.path() == statefulURL.standardizedFileURL.path())
 }
@@ -93,7 +93,7 @@ import Testing
         .appending(path: "Models", directoryHint: .isDirectory)
         .appending(path: "Qwen3", directoryHint: .isDirectory)
     let statefulURL = modelDirectory
-        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlpackage", directoryHint: .isDirectory)
+        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlmodelc", directoryHint: .isDirectory)
     let tokenizerURL = modelDirectory.appending(path: "tokenizer.json")
     try FileManager.default.createDirectory(at: statefulURL, withIntermediateDirectories: true)
     try Data("qwen-stateful".utf8).write(to: statefulURL.appending(path: "Manifest.json"))
@@ -117,7 +117,7 @@ import Testing
     #expect(plan.destinationRootDescription == "Application Support/WatchLM")
     #expect(plan.items.map(\.destinationRelativePath) == [
         "model-manifest.json",
-        "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage",
+        "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlmodelc",
         "Models/Qwen3/tokenizer.json"
     ])
     #expect(plan.items[1].purposes == [.prefill, .decode])
@@ -134,7 +134,7 @@ import Testing
         .appending(path: "Models", directoryHint: .isDirectory)
         .appending(path: "Qwen3", directoryHint: .isDirectory)
     let statefulURL = modelDirectory
-        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlpackage", directoryHint: .isDirectory)
+        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlmodelc", directoryHint: .isDirectory)
     let tokenizerURL = modelDirectory.appending(path: "tokenizer.json")
     try FileManager.default.createDirectory(at: statefulURL, withIntermediateDirectories: true)
     try Data("qwen-stateful".utf8).write(to: statefulURL.appending(path: "Manifest.json"))
@@ -162,7 +162,7 @@ import Testing
     #expect(result.totalByteCount == plan.totalByteCount)
     #expect(FileManager.default.fileExists(atPath: targetRootURL.appending(path: "model-manifest.json").path))
     #expect(FileManager.default.fileExists(atPath: targetRootURL.appending(path: "Models/Qwen3/tokenizer.json").path))
-    #expect(FileManager.default.fileExists(atPath: targetRootURL.appending(path: "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage").path))
+    #expect(FileManager.default.fileExists(atPath: targetRootURL.appending(path: "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlmodelc").path))
 
     let targetStore = ModelAssetStore(rootURL: targetRootURL)
     let targetManifest = try targetStore.loadManifest()

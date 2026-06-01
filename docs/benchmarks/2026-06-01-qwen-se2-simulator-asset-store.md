@@ -23,7 +23,7 @@ artifact layout: Application Support / Models/Qwen3/
 stateful runtime requirement: watchOS 11+
 ```
 
-The test creates a small stand-in `.mlpackage` with the same manifest-relative
+The test creates a small stand-in `.mlmodelc` with the same manifest-relative
 path as the real Qwen artifact, writes a tokenizer fixture, saves the manifest,
 verifies hashes, selects the SE2 context256 artifact, and checks that the
 watchOS 11 stateful route reports `.installed`.
@@ -55,7 +55,6 @@ The SE2 simulator can build and execute the Swift package test bundle through
 Xcode, and the Qwen stateful asset-store contract is now testable with
 `-only-testing`.
 
-The next SE2 step is a real model-load experiment: stage the compiled Qwen
-stateful `.mlmodelc` or `.mlpackage` into the simulator-accessible container,
-then run a load-only Core ML gate before attempting token generation on
-simulator or physical hardware.
+The later installed-root gate confirmed the staged runtime should use the
+compiled Qwen stateful `.mlmodelc`; staging an uncompiled `.mlpackage` reaches
+the asset-store path but fails when Core ML loads the model.

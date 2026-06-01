@@ -53,7 +53,7 @@ Result:
 
 ```text
 items: 3
-total_bytes: 609858910
+total_bytes: 609897300
 destination: Application Support/WatchLM
 ```
 
@@ -62,7 +62,7 @@ destination: Application Support/WatchLM
 ```text
 Application Support/WatchLM/
   model-manifest.json
-  Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage
+  Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlmodelc
   Models/Qwen3/tokenizer.json
 ```
 
@@ -70,11 +70,17 @@ The stateful-step Core ML artifact appears once in the staging plan and is
 marked for both `prefill` and `decode`, which avoids double-copying the same
 571 MB model.
 
+The installed asset must be a precompiled `.mlmodelc`. Staging the uncompiled
+`.mlpackage` reached the installed-root gate but failed at Core ML load time
+with a request to compile the model first. Device staging should therefore use
+the compiled watchOS artifact and should not rely on runtime compilation on the
+watch.
+
 ## Hashes
 
 ```text
 model actualSHA256:
-eec61f0a0900c4cc66b10e7b82534a0cf9c2aa31845bf24baa483f12e7a84c03
+97ae982de576d323836eb05f91f7794a2efffd8e226c437a1c272aff7c49eef4
 
 tokenizer actualSHA256:
 aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4

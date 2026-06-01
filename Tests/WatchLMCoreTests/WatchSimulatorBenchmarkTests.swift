@@ -27,7 +27,7 @@ import Testing
         .appending(path: "Models", directoryHint: .isDirectory)
         .appending(path: "Qwen3", directoryHint: .isDirectory)
     let statefulURL = modelDirectory
-        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlpackage", directoryHint: .isDirectory)
+        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlmodelc", directoryHint: .isDirectory)
     let tokenizerURL = modelDirectory.appending(path: "tokenizer.json")
     try FileManager.default.createDirectory(at: statefulURL, withIntermediateDirectories: true)
     try Data("qwen-stateful".utf8).write(to: statefulURL.appending(path: "Manifest.json"))

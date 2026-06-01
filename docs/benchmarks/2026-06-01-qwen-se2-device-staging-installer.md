@@ -14,6 +14,9 @@ Support directory.
 The physical device is still not connected in Xcode, so this run verifies the
 installer with small same-layout fixtures and keeps the real Qwen 610 MB
 artifact as a generated plan/hash input rather than duplicating it locally.
+The later installed-root decode gate narrowed this requirement further: the
+watch container should receive the precompiled `.mlmodelc`, not the uncompiled
+`.mlpackage`.
 
 ## Swift API
 
@@ -81,6 +84,7 @@ The physical-device gap is now narrower:
 done: generate device staging plan
 done: copy plan items into a target root
 done: verify target root through ModelAssetStore
+done: confirm installed-root runtime needs compiled .mlmodelc
 pending: locate a named physical Watch destination
 pending: map or copy into the actual watch app container
 pending: run the existing stateful decode gate on physical SE2

@@ -13,7 +13,7 @@ final class WatchSimulatorAssetStoreXCTests: XCTestCase {
             .appending(path: "Models", directoryHint: .isDirectory)
             .appending(path: "Qwen3", directoryHint: .isDirectory)
         let statefulURL = modelDirectory
-            .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlpackage", directoryHint: .isDirectory)
+            .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlmodelc", directoryHint: .isDirectory)
         let tokenizerURL = modelDirectory.appending(path: "tokenizer.json")
         try FileManager.default.createDirectory(at: statefulURL, withIntermediateDirectories: true)
         try Data("qwen-stateful".utf8).write(to: statefulURL.appending(path: "Manifest.json"))
@@ -39,7 +39,7 @@ final class WatchSimulatorAssetStoreXCTests: XCTestCase {
 
         XCTAssertEqual(state, .installed(manifest: loadedManifest))
         XCTAssertEqual(artifact.contextVariant, 256)
-        XCTAssertEqual(artifact.prefillPath, "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage")
+        XCTAssertEqual(artifact.prefillPath, "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlmodelc")
         XCTAssertEqual(artifact.decodePath, artifact.prefillPath)
         print("WATCHLM_XCTEST_QWEN_ASSET_STORE state=installed context=256 graph=stateful-step-kv")
     }

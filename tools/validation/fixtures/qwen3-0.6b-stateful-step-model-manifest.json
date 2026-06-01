@@ -70,12 +70,12 @@
   "contextVariants": [256],
   "asset": {
     "storage": "application-support",
-    "prefillPath": "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage",
-    "decodePath": "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage",
+    "prefillPath": "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlmodelc",
+    "decodePath": "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlmodelc",
     "tokenizerPath": "Models/Qwen3/tokenizer.json",
-    "sha256": "eec61f0a0900c4cc66b10e7b82534a0cf9c2aa31845bf24baa483f12e7a84c03",
-    "prefillSHA256": "eec61f0a0900c4cc66b10e7b82534a0cf9c2aa31845bf24baa483f12e7a84c03",
-    "decodeSHA256": "eec61f0a0900c4cc66b10e7b82534a0cf9c2aa31845bf24baa483f12e7a84c03",
+    "sha256": "97ae982de576d323836eb05f91f7794a2efffd8e226c437a1c272aff7c49eef4",
+    "prefillSHA256": "97ae982de576d323836eb05f91f7794a2efffd8e226c437a1c272aff7c49eef4",
+    "decodeSHA256": "97ae982de576d323836eb05f91f7794a2efffd8e226c437a1c272aff7c49eef4",
     "tokenizerSHA256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4"
   },
   "quantization": {

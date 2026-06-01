@@ -132,13 +132,13 @@ import Testing
 
     #expect(se2Artifact.contextVariant == 256)
     #expect(se3Artifact.contextVariant == 256)
-    #expect(se2Artifact.prefillPath == "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlpackage")
+    #expect(se2Artifact.prefillPath == "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlmodelc")
     #expect(se2Artifact.decodePath == se2Artifact.prefillPath)
     #expect(se3Artifact.prefillPath == se2Artifact.prefillPath)
     #expect(se3Artifact.decodePath == se2Artifact.prefillPath)
     #expect(se2Artifact.tokenizerPath == "Models/Qwen3/tokenizer.json")
     #expect(se3Artifact.tokenizerPath == "Models/Qwen3/tokenizer.json")
-    #expect(se2Artifact.prefillSHA256 == "eec61f0a0900c4cc66b10e7b82534a0cf9c2aa31845bf24baa483f12e7a84c03")
+    #expect(se2Artifact.prefillSHA256 == "97ae982de576d323836eb05f91f7794a2efffd8e226c437a1c272aff7c49eef4")
     #expect(se2Artifact.decodeSHA256 == se2Artifact.prefillSHA256)
     #expect(se2Artifact.tokenizerSHA256 == "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4")
 }
@@ -389,7 +389,7 @@ import Testing
     try FileManager.default.createDirectory(at: modelDirectory, withIntermediateDirectories: true)
 
     let statefulURL = modelDirectory
-        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlpackage", directoryHint: .isDirectory)
+        .appending(path: "stateful-step-kv-256-fp32-compute-int8.mlmodelc", directoryHint: .isDirectory)
     let tokenizerURL = modelDirectory.appending(path: "tokenizer.json")
     try FileManager.default.createDirectory(at: statefulURL, withIntermediateDirectories: true)
     try Data("qwen-stateful-step".utf8).write(to: statefulURL.appending(path: "Manifest.json"))
