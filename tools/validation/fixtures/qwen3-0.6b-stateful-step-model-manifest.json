@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "model": {
+    "id": "Qwen/Qwen3-0.6B",
+    "revision": "stateful-step-256-fp32-compute-int8",
+    "parameterCount": 600000000,
+    "role": "runtime-candidate"
+  },
+  "runtime": {
+    "type": "coreml-mlprogram",
+    "entrypoints": ["prefill", "decode"],
+    "kvCacheMode": "stateful-preferred",
+    "graphSchema": {
+      "interface": "stateful-step-kv",
+      "layerCount": 28,
+      "kvHeads": 8,
+      "headDimension": 128,
+      "prefill": {
+        "inputIDs": "input_ids",
+        "positionIDs": "position_ids",
+        "causalMask": "causal_mask",
+        "logits": "logits",
+        "keyPrefix": "present_key_",
+        "valuePrefix": "present_value_"
+      },
+      "decode": {
+        "tokenID": "input_ids",
+        "positionID": "position_ids",
+        "causalMask": "causal_mask",
+        "logits": "logits",
+        "pastKeyPrefix": "past_key_",
+        "pastValuePrefix": "past_value_",
+        "newKeyPrefix": "new_key_",
+        "newValuePrefix": "new_value_"
+      }
+    }
+  },
+  "architecture": {
+    "type": "Qwen3ForCausalLM",
+    "layers": 28,
+    "hiddenSize": 1024,
+    "queryHeads": 16,
+    "kvHeads": 8,
+    "headDimension": 128,
+    "maxContextTokens": 40960,
+    "tokenizer": {
+      "source": "Qwen/Qwen3-0.6B",
+      "preserved": true,
+      "vocabularyPreserved": true,
+      "chatTemplate": "qwen3-nonthinking",
+      "addBosToken": false,
+      "bosTokenID": 151643,
+      "eosTokenIDs": [151645]
+    }
+  },
+  "deviceProfiles": {
+    "watch-se-2": {
+      "sip": "S8",
+      "neuralEngineCores": 2,
+      "defaultContextVariant": 256,
+      "maxNewTokens": 48
+    },
+    "watch-se-3": {
+      "sip": "S10",
+      "neuralEngineCores": 4,
+      "defaultContextVariant": 256,
+      "maxNewTokens": 64
+    }
+  },
+  "contextVariants": [256],
+  "asset": {
+    "storage": "application-support",
+    "prefillPath": "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlmodelc",
+    "decodePath": "Models/Qwen3/stateful-step-kv-256-fp32-compute-int8.mlmodelc",
+    "tokenizerPath": "Models/Qwen3/tokenizer.json",
+    "sha256": "97ae982de576d323836eb05f91f7794a2efffd8e226c437a1c272aff7c49eef4",
+    "prefillSHA256": "97ae982de576d323836eb05f91f7794a2efffd8e226c437a1c272aff7c49eef4",
+    "decodeSHA256": "97ae982de576d323836eb05f91f7794a2efffd8e226c437a1c272aff7c49eef4",
+    "tokenizerSHA256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4"
+  },
+  "quantization": {
+    "strategy": "mixed-precision-fidelity-first",
+    "weights": {
+      "embedding": "int8",
+      "lmHead": "int8",
+      "norms": "fp16",
+      "attentionQKO": "int8",
+      "attentionV": "int8",
+      "ffn": "int8"
+    },
+    "kvCache": "fp16",
+    "structuralReduction": false
+  },
+  "fallbackPolicy": {
+    "requiresBenchmarkEvidence": true,
+    "order": [
+      "adjust-mixed-precision",
+      "reduce-context",
+      "optimize-lm-head",
+      "vocabulary-pruning-last-resort"
+    ]
+  }
+}

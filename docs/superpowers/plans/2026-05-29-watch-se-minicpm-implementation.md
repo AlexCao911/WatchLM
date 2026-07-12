@@ -58,7 +58,7 @@ Files:
 
 Test-first steps:
 
-- [ ] Add `test/modelManifest.test.js` with coverage for:
+- [x] Add `test/modelManifest.test.js` with coverage for:
   - valid MiniCPM5 manifest passes.
   - runtime must equal `coreml-mlprogram`.
   - source model must equal `openbmb/MiniCPM5-1B`.
@@ -67,7 +67,7 @@ Test-first steps:
   - model bundle location must not be `app-bundle`.
   - quantization policy must include mixed precision and int8 KV cache.
   - `selectContextVariant` clamps requests to the largest supported variant that fits.
-- [ ] Run the failing test:
+- [x] Run the failing test:
 
 ```sh
 node --test test/modelManifest.test.js
@@ -75,8 +75,8 @@ node --test test/modelManifest.test.js
 
 Implementation steps:
 
-- [ ] Add `package.json` with `"type": "module"` and a `test` script that runs `node --test`.
-- [ ] Add `fixtures/sample-model-manifest.json` containing:
+- [x] Add `package.json` with `"type": "module"` and a `test` script that runs `node --test`.
+- [x] Add `fixtures/sample-model-manifest.json` containing:
   - model id `openbmb/MiniCPM5-1B`
   - runtime `coreml-mlprogram`
   - device profiles `watch-se-2` and `watch-se-3`
@@ -84,7 +84,7 @@ Implementation steps:
   - architecture dimensions from the design spec
   - mixed precision quantization policy
   - asset storage location `application-support`
-- [ ] Add `src/modelManifest.js` exports:
+- [x] Add `src/modelManifest.js` exports:
   - `SUPPORTED_CONTEXT_VARIANTS`
   - `SUPPORTED_DEVICE_PROFILES`
   - `EXPECTED_MODEL_ID`
@@ -94,9 +94,9 @@ Implementation steps:
   - `assertValidModelManifest(manifest)`
   - `selectContextVariant(manifest, deviceProfile, requestedTokens)`
   - `summarizeModelManifest(manifest)`
-- [ ] Make validation return `{ ok, errors, warnings }` without throwing.
-- [ ] Make `assertValidModelManifest` throw one combined error with all validation messages.
-- [ ] Run:
+- [x] Make validation return `{ ok, errors, warnings }` without throwing.
+- [x] Make `assertValidModelManifest` throw one combined error with all validation messages.
+- [x] Run:
 
 ```sh
 node --test test/modelManifest.test.js
@@ -122,16 +122,16 @@ Files:
 
 Test-first steps:
 
-- [ ] Add tests that require prompt categories:
+- [x] Add tests that require prompt categories:
   - `zh_short_instruction`
   - `en_short_instruction`
   - `code_small_fix`
   - `watch_utility`
   - `safety_refusal`
-- [ ] Add tests that every prompt has `id`, `category`, `language`, `input`, `maxNewTokens`, and `qualityChecks`.
-- [ ] Add tests that `maxNewTokens` is between 16 and 96.
-- [ ] Add tests that prompt text length is compatible with a 256-token smoke baseline by using a conservative 4-characters-per-token estimate.
-- [ ] Run the failing test:
+- [x] Add tests that every prompt has `id`, `category`, `language`, `input`, `maxNewTokens`, and `qualityChecks`.
+- [x] Add tests that `maxNewTokens` is between 16 and 96.
+- [x] Add tests that prompt text length is compatible with a 256-token smoke baseline by using a conservative 4-characters-per-token estimate.
+- [x] Run the failing test:
 
 ```sh
 node --test test/benchmarkPrompts.test.js
@@ -139,15 +139,15 @@ node --test test/benchmarkPrompts.test.js
 
 Implementation steps:
 
-- [ ] Add `fixtures/benchmark-prompts.json` with at least two prompts per required category.
-- [ ] Add `src/benchmarkPrompts.js` exports:
+- [x] Add `fixtures/benchmark-prompts.json` with at least two prompts per required category.
+- [x] Add `src/benchmarkPrompts.js` exports:
   - `REQUIRED_PROMPT_CATEGORIES`
   - `loadBenchmarkPrompts(fileUrlOrPath)`
   - `validateBenchmarkPrompts(prompts)`
   - `groupPromptsByCategory(prompts)`
   - `estimatePromptTokens(prompt)`
-- [ ] Ensure validation reports all prompt errors in one result object.
-- [ ] Run:
+- [x] Ensure validation reports all prompt errors in one result object.
+- [x] Run:
 
 ```sh
 node --test test/benchmarkPrompts.test.js
@@ -173,7 +173,7 @@ Files:
 
 Test-first steps:
 
-- [ ] Add tests that a report must include:
+- [x] Add tests that a report must include:
   - source model id
   - device profile
   - runtime
@@ -187,14 +187,14 @@ Test-first steps:
   - thermal state over five short turns
   - quality drift summary
   - fallback decision
-- [ ] Add SE 3 gate tests:
+- [x] Add SE 3 gate tests:
   - first visible token target is at most 3 seconds.
   - sustained decode target is at least 3 tokens per second.
-- [ ] Add SE 2 gate tests:
+- [x] Add SE 2 gate tests:
   - first visible token target is at most 5 seconds.
   - sustained decode target is at least 1.5 tokens per second.
-- [ ] Add tests that fallback decisions require evidence links or report sections.
-- [ ] Run the failing test:
+- [x] Add tests that fallback decisions require evidence links or report sections.
+- [x] Run the failing test:
 
 ```sh
 node --test test/benchmarkReport.test.js
@@ -202,15 +202,15 @@ node --test test/benchmarkReport.test.js
 
 Implementation steps:
 
-- [ ] Add `fixtures/sample-benchmark-report.json` with one SE 2 diagnostic report and one SE 3 target report.
-- [ ] Add `src/benchmarkReport.js` exports:
+- [x] Add `fixtures/sample-benchmark-report.json` with one SE 2 diagnostic report and one SE 3 target report.
+- [x] Add `src/benchmarkReport.js` exports:
   - `DEVICE_TARGETS`
   - `validateBenchmarkReport(report)`
   - `evaluateBenchmarkGates(report)`
   - `summarizeBenchmarkReport(report)`
   - `requiresFallbackEvidence(report)`
-- [ ] Ensure report validation uses the manifest constants from `src/modelManifest.js`.
-- [ ] Run:
+- [x] Ensure report validation uses the manifest constants from `src/modelManifest.js`.
+- [x] Run:
 
 ```sh
 node --test test/benchmarkReport.test.js
@@ -236,12 +236,12 @@ Files:
 
 Test-first steps:
 
-- [ ] Add CLI tests that run `node bin/watchlm-validate.js` against:
+- [x] Add CLI tests that run `node bin/watchlm-validate.js` against:
   - `fixtures/sample-model-manifest.json`
   - `fixtures/benchmark-prompts.json`
   - `fixtures/sample-benchmark-report.json`
-- [ ] Add a negative test fixture in the test file itself, written to a temporary directory during the test, so invalid runtime output exits non-zero.
-- [ ] Run the failing test:
+- [x] Add a negative test fixture in the test file itself, written to a temporary directory during the test, so invalid runtime output exits non-zero.
+- [x] Run the failing test:
 
 ```sh
 node --test test/validationCli.test.js
@@ -249,17 +249,17 @@ node --test test/validationCli.test.js
 
 Implementation steps:
 
-- [ ] Add `bin/watchlm-validate.js` with commands:
+- [x] Add `bin/watchlm-validate.js` with commands:
   - `manifest <path>`
   - `prompts <path>`
   - `report <path>`
   - `all --manifest <path> --prompts <path> --report <path>`
-- [ ] Add `README.md` with:
+- [x] Add `README.md` with:
   - project purpose
   - local validation commands
   - first implementation status
   - note that real model artifacts are intentionally not committed
-- [ ] Run:
+- [x] Run:
 
 ```sh
 node --test test/validationCli.test.js
@@ -280,6 +280,7 @@ Purpose: create watch-consumable runtime and asset state contracts without requi
 Files:
 
 - `Package.swift`
+- `.gitignore`
 - `Sources/WatchLMCore/DeviceProfile.swift`
 - `Sources/WatchLMCore/ModelManifest.swift`
 - `Sources/WatchLMCore/ContextVariantSelector.swift`
@@ -292,11 +293,11 @@ Files:
 
 Test-first steps:
 
-- [ ] Add Swift tests for manifest decoding from JSON matching `fixtures/sample-model-manifest.json`.
-- [ ] Add tests that context selection clamps to supported variants.
-- [ ] Add tests that asset states represent missing, installing, installed, invalid hash, incompatible manifest, and unavailable runtime.
-- [ ] Add tests that inference session state supports idle, prefill, decoding, cancelled, finished, failed, and thermal degraded states.
-- [ ] Run the failing tests:
+- [x] Add Swift tests for manifest decoding from JSON matching `fixtures/sample-model-manifest.json`.
+- [x] Add tests that context selection clamps to supported variants.
+- [x] Add tests that asset states represent missing, installing, installed, invalid hash, incompatible manifest, and unavailable runtime.
+- [x] Add tests that inference session state supports idle, prefill, decoding, cancelled, finished, failed, and thermal degraded states.
+- [x] Run the failing tests:
 
 ```sh
 swift test
@@ -304,10 +305,10 @@ swift test
 
 Implementation steps:
 
-- [ ] Add `Package.swift` with library target `WatchLMCore`.
-- [ ] Implement Swift types with `Codable`, `Equatable`, and small pure functions only.
-- [ ] Avoid network, iPhone companion, and real Core ML calls in this package.
-- [ ] Run:
+- [x] Add `Package.swift` with library target `WatchLMCore`.
+- [x] Implement Swift types with `Codable`, `Equatable`, and small pure functions only.
+- [x] Avoid network, iPhone companion, and real Core ML calls in this package.
+- [x] Run:
 
 ```sh
 swift test
@@ -334,11 +335,11 @@ Files:
 
 Test-first steps:
 
-- [ ] Add tests that the runtime protocol records load, prefill, first token, decode step, and total timings.
-- [ ] Add tests that mock streaming emits tokens incrementally.
-- [ ] Add tests that cancellation is observed at token boundaries.
-- [ ] Add tests that runtime errors are typed and user-visible.
-- [ ] Run the failing tests:
+- [x] Add tests that the runtime protocol records load, prefill, first token, decode step, and total timings.
+- [x] Add tests that mock streaming emits tokens incrementally.
+- [x] Add tests that cancellation is observed at token boundaries.
+- [x] Add tests that runtime errors are typed and user-visible.
+- [x] Run the failing tests:
 
 ```sh
 swift test
@@ -346,9 +347,9 @@ swift test
 
 Implementation steps:
 
-- [ ] Implement protocols and mock runtime in pure Swift.
-- [ ] Keep Core ML imports out of `WatchLMCore`; a future watch target will provide the concrete adapter.
-- [ ] Run:
+- [x] Implement protocols and mock runtime in pure Swift.
+- [x] Keep Core ML imports out of `WatchLMCore`; a future watch target will provide the concrete adapter.
+- [x] Run:
 
 ```sh
 swift test
@@ -375,7 +376,7 @@ Files:
 
 Test-first steps:
 
-- [ ] Add tests that conversion artifacts must declare:
+- [x] Add tests that conversion artifacts must declare:
   - source checkpoint id
   - source revision or checksum
   - tokenizer checksum
@@ -385,8 +386,8 @@ Test-first steps:
   - quantization policy id
   - logits validation summary
   - excluded large artifact paths
-- [ ] Add tests that `.mlpackage`, `.mlmodelc`, `.gguf`, `.safetensors`, and generated benchmark outputs are ignored by default.
-- [ ] Run the failing test:
+- [x] Add tests that `.mlpackage`, `.mlmodelc`, `.gguf`, `.safetensors`, and generated benchmark outputs are ignored by default.
+- [x] Run the failing test:
 
 ```sh
 node --test test/conversionContract.test.js
@@ -394,10 +395,10 @@ node --test test/conversionContract.test.js
 
 Implementation steps:
 
-- [ ] Add `conversion/coreml-artifact-contract.json`.
-- [ ] Add `conversion/README.md` explaining reproducible artifact generation and why large model files stay outside git.
-- [ ] Add `.gitignore` entries for generated model and report artifacts.
-- [ ] Run:
+- [x] Add `conversion/coreml-artifact-contract.json`.
+- [x] Add `conversion/README.md` explaining reproducible artifact generation and why large model files stay outside git.
+- [x] Add `.gitignore` entries for generated model and report artifacts.
+- [x] Run:
 
 ```sh
 node --test test/conversionContract.test.js
@@ -423,7 +424,7 @@ Files:
 
 Steps:
 
-- [ ] Document the exact watchOS app shell screens:
+- [x] Document the exact watchOS app shell screens:
   - missing model
   - installing model
   - ready
@@ -431,9 +432,9 @@ Steps:
   - cancelled
   - thermal degraded
   - error recovery
-- [ ] Document which `WatchLMCore` types each screen consumes.
-- [ ] Update traceability matrix evidence rows for completed host tooling and Swift runtime contracts.
-- [ ] Run:
+- [x] Document which `WatchLMCore` types each screen consumes.
+- [x] Update traceability matrix evidence rows for completed host tooling and Swift runtime contracts.
+- [x] Run:
 
 ```sh
 node --test

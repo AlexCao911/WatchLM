@@ -1,0 +1,30 @@
+{
+  "storage" : "model.espresso.weights",
+  "analyses" : {
+
+  },
+  "properties" : {
+
+  },
+  "format_version" : 200,
+  "metadata_in_weights" : [
+
+  ],
+  "layers" : [
+    {
+      "bottom" : "token",
+      "beta" : 0,
+      "weights" : {
+
+      },
+      "mode" : 6,
+      "debug_info" : "identity",
+      "top" : "logits",
+      "type" : "activation",
+      "name" : "identity",
+      "attributes" : {
+        "is_output" : 1
+      }
+    }
+  ]
+}

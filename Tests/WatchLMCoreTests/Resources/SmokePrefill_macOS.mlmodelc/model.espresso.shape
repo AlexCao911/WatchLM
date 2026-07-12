@@ -1,0 +1,35 @@
+{
+  "layer_shapes" : {
+    "kv_cache" : {
+      "k" : 1,
+      "w" : 1,
+      "n" : 1,
+      "_rank" : 1,
+      "h" : 1
+    },
+    "prompt_sum" : {
+      "k" : 1,
+      "w" : 1,
+      "n" : 1,
+      "_rank" : 1,
+      "h" : 1
+    },
+    "next_token" : {
+      "k" : 1,
+      "w" : 1,
+      "n" : 1,
+      "_rank" : 1,
+      "h" : 1
+    },
+    "input_ids" : {
+      "k" : 1,
+      "w" : 4,
+      "n" : 1,
+      "_rank" : 1,
+      "h" : 1
+    }
+  },
+  "global_shapes" : {
+
+  }
+}

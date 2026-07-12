@@ -1,0 +1,105 @@
+[
+  {
+    "metadataOutputVersion" : "3.0",
+    "shortDescription" : "WatchLM stateful KV smoke ML Program",
+    "outputSchema" : [
+      {
+        "hasShapeFlexibility" : "0",
+        "isOptional" : "0",
+        "dataType" : "Float16",
+        "formattedType" : "MultiArray (Float16 1 × 8)",
+        "shortDescription" : "",
+        "shape" : "[1, 8]",
+        "name" : "logits",
+        "type" : "MultiArray"
+      }
+    ],
+    "modelParameters" : [
+
+    ],
+    "author" : "WatchLM",
+    "specificationVersion" : 9,
+    "mlProgramOperationTypeHistogram" : {
+      "Ios16.reduceSum" : 3,
+      "Ios18.maximum" : 1,
+      "Ios18.sub" : 2,
+      "Ios18.readState" : 1,
+      "Ios18.writeState" : 1,
+      "Ios18.reshape" : 1,
+      "Ios18.abs" : 1,
+      "Ios18.cast" : 2,
+      "Ios18.add" : 5,
+      "Ios18.mul" : 5
+    },
+    "computePrecision" : "Mixed (Float16, Int32)",
+    "isUpdatable" : "0",
+    "stateSchema" : [
+      {
+        "dataType" : "Float16",
+        "isOptional" : "0",
+        "formattedType" : "State (Float16 1)",
+        "shortDescription" : "",
+        "shape" : "[1]",
+        "name" : "last_token",
+        "type" : "State"
+      }
+    ],
+    "availability" : {
+      "macOS" : "15.0",
+      "tvOS" : "18.0",
+      "visionOS" : "2.0",
+      "watchOS" : "11.0",
+      "iOS" : "18.0",
+      "macCatalyst" : "18.0"
+    },
+    "modelType" : {
+      "name" : "MLModelType_mlProgram"
+    },
+    "inputSchema" : [
+      {
+        "dataType" : "Int32",
+        "hasShapeFlexibility" : "1",
+        "isOptional" : "0",
+        "shapeFlexibility" : "1 × 1...4",
+        "shapeRange" : "[[1, 1], [1, 4]]",
+        "formattedType" : "MultiArray (Int32 1 × 1)",
+        "type" : "MultiArray",
+        "shape" : "[1, 1]",
+        "name" : "input_ids",
+        "shortDescription" : ""
+      },
+      {
+        "dataType" : "Int32",
+        "hasShapeFlexibility" : "1",
+        "isOptional" : "0",
+        "shapeFlexibility" : "1 × 1...4",
+        "shapeRange" : "[[1, 1], [1, 4]]",
+        "formattedType" : "MultiArray (Int32 1 × 1)",
+        "type" : "MultiArray",
+        "shape" : "[1, 1]",
+        "name" : "position_ids",
+        "shortDescription" : ""
+      },
+      {
+        "dataType" : "Float16",
+        "hasShapeFlexibility" : "1",
+        "isOptional" : "0",
+        "shapeFlexibility" : "1 × 1 × 1...4 × 1...5",
+        "shapeRange" : "[[1, 1], [1, 1], [1, 4], [1, 5]]",
+        "formattedType" : "MultiArray (Float16 1 × 1 × 1 × 2)",
+        "type" : "MultiArray",
+        "shape" : "[1, 1, 1, 2]",
+        "name" : "causal_mask",
+        "shortDescription" : ""
+      }
+    ],
+    "userDefinedMetadata" : {
+      "com.github.apple.coremltools.conversion_date" : "2026-05-30",
+      "com.github.apple.coremltools.source" : "torch==2.12.0",
+      "com.github.apple.coremltools.version" : "9.0",
+      "com.github.apple.coremltools.source_dialect" : "TorchScript"
+    },
+    "generatedClassName" : "SmokeStatefulKV",
+    "method" : "predict"
+  }
+]

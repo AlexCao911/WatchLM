@@ -1,0 +1,25 @@
+program(1.0)
+[buildInfo = dict<tensor<string, []>, tensor<string, []>>({{"coremlc-component-MIL", "3510.2.1"}, {"coremlc-version", "3500.32.1"}, {"coremltools-component-torch", "2.12.0"}, {"coremltools-source-dialect", "TorchScript"}, {"coremltools-version", "9.0"}})]
+{
+    func main<ios17>(tensor<fp16, [1, 1, 1, 5]> causal_mask, tensor<fp16, [1, 1, 4, 1]> past_key_0, tensor<fp16, [1, 1, 4, 1]> past_value_0, tensor<int32, [1, 1]> position_id, tensor<int32, [1, 1]> token_id) {
+            tensor<string, []> var_11_to_fp16_dtype_0 = const()[name = tensor<string, []>("op_11_to_fp16_dtype_0"), val = tensor<string, []>("fp16")];
+            tensor<fp16, []> var_17_to_fp16 = const()[name = tensor<string, []>("op_17_to_fp16"), val = tensor<fp16, []>(0x1p+0)];
+            tensor<fp16, [1, 1]> token_id_to_fp16 = cast(dtype = var_11_to_fp16_dtype_0, x = token_id)[name = tensor<string, []>("cast_8")];
+            tensor<fp16, [1, 1]> target_cast_fp16 = add(x = token_id_to_fp16, y = var_17_to_fp16)[name = tensor<string, []>("target_cast_fp16")];
+            tensor<fp16, [1, 8]> vocab_to_fp16 = const()[name = tensor<string, []>("vocab_to_fp16"), val = tensor<fp16, [1, 8]>([[0x0p+0, 0x1p+0, 0x1p+1, 0x1.8p+1, 0x1p+2, 0x1.4p+2, 0x1.8p+2, 0x1.cp+2]])];
+            tensor<fp16, [1, 8]> var_20_cast_fp16 = sub(x = vocab_to_fp16, y = target_cast_fp16)[name = tensor<string, []>("op_20_cast_fp16")];
+            tensor<fp16, [1, 8]> var_21_cast_fp16 = abs(x = var_20_cast_fp16)[name = tensor<string, []>("op_21_cast_fp16")];
+            tensor<fp16, []> const_0_promoted_to_fp16 = const()[name = tensor<string, []>("const_0_promoted_to_fp16"), val = tensor<fp16, []>(-0x1p+0)];
+            tensor<fp16, [1, 8]> var_22_cast_fp16 = mul(x = var_21_cast_fp16, y = const_0_promoted_to_fp16)[name = tensor<string, []>("op_22_cast_fp16")];
+            tensor<fp16, []> var_23_to_fp16 = const()[name = tensor<string, []>("op_23_to_fp16"), val = tensor<fp16, []>(0x1.9p+6)];
+            tensor<fp16, [1, 8]> logits = mul(x = var_22_cast_fp16, y = var_23_to_fp16)[name = tensor<string, []>("op_24_cast_fp16")];
+            tensor<int32, [4]> var_39 = const()[name = tensor<string, []>("op_39"), val = tensor<int32, [4]>([1, 1, 1, 1])];
+            tensor<fp16, [1, 1, 1, 1]> new_key_0 = reshape(shape = var_39, x = target_cast_fp16)[name = tensor<string, []>("op_40_cast_fp16")];
+            tensor<fp16, []> var_43_to_fp16 = const()[name = tensor<string, []>("op_43_to_fp16"), val = tensor<fp16, []>(0x1.4p+3)];
+            tensor<fp16, [1, 1, 1, 1]> new_value_0 = add(x = new_key_0, y = var_43_to_fp16)[name = tensor<string, []>("op_44_cast_fp16")];
+            tensor<int32, [1, 1]> position_id_tmp = identity(x = position_id)[name = tensor<string, []>("position_id_tmp")];
+            tensor<fp16, [1, 1, 1, 5]> causal_mask_tmp = identity(x = causal_mask)[name = tensor<string, []>("causal_mask_tmp")];
+            tensor<fp16, [1, 1, 4, 1]> past_key_0_tmp = identity(x = past_key_0)[name = tensor<string, []>("past_key_0_tmp")];
+            tensor<fp16, [1, 1, 4, 1]> past_value_0_tmp = identity(x = past_value_0)[name = tensor<string, []>("past_value_0_tmp")];
+        } -> (logits, new_key_0, new_value_0);
+}

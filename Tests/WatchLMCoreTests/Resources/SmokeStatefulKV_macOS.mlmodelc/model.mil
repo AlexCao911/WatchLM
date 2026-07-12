@@ -1,0 +1,42 @@
+program(1.3)
+[buildInfo = dict<string, string>({{"coremlc-component-MIL", "3510.2.1"}, {"coremlc-version", "3500.32.1"}, {"coremltools-component-torch", "2.12.0"}, {"coremltools-source-dialect", "TorchScript"}, {"coremltools-version", "9.0"}})]
+{
+    func main<ios18>(tensor<fp16, [1, 1, ?, ?]> causal_mask, tensor<int32, [1, ?]> input_ids, state<tensor<fp16, [1]>> last_token, tensor<int32, [1, ?]> position_ids) [FlexibleShapeInformation = tuple<tuple<string, dict<string, tensor<int32, [?]>>>, tuple<string, dict<string, list<tensor<int32, [2]>, ?>>>>((("DefaultShapes", {{"causal_mask", [1, 1, 1, 2]}, {"input_ids", [1, 1]}, {"position_ids", [1, 1]}}), ("RangeDims", {{"causal_mask", [[1, 1], [1, 1], [1, 4], [1, 5]]}, {"input_ids", [[1, 1], [1, 4]]}, {"position_ids", [[1, 1], [1, 4]]}})))] {
+            bool var_12_keep_dims_0 = const()[name = string("op_12_keep_dims_0"), val = bool(false)];
+            string var_10_to_fp16_dtype_0 = const()[name = string("op_10_to_fp16_dtype_0"), val = string("fp16")];
+            tensor<fp16, [1, ?]> input_ids_to_fp16 = cast(dtype = var_10_to_fp16_dtype_0, x = input_ids)[name = string("cast_6")];
+            fp16 var_12_cast_fp16 = reduce_sum(keep_dims = var_12_keep_dims_0, x = input_ids_to_fp16)[name = string("op_12_cast_fp16")];
+            fp16 var_13_to_fp16 = const()[name = string("op_13_to_fp16"), val = fp16(0x0p+0)];
+            fp16 input_zero_cast_fp16 = mul(x = var_12_cast_fp16, y = var_13_to_fp16)[name = string("input_zero_cast_fp16")];
+            bool var_21_keep_dims_0 = const()[name = string("op_21_keep_dims_0"), val = bool(false)];
+            string var_19_to_fp16_dtype_0 = const()[name = string("op_19_to_fp16_dtype_0"), val = string("fp16")];
+            tensor<fp16, [1, ?]> position_ids_to_fp16 = cast(dtype = var_19_to_fp16_dtype_0, x = position_ids)[name = string("cast_5")];
+            fp16 var_21_cast_fp16 = reduce_sum(keep_dims = var_21_keep_dims_0, x = position_ids_to_fp16)[name = string("op_21_cast_fp16")];
+            fp16 var_22_to_fp16 = const()[name = string("op_22_to_fp16"), val = fp16(0x0p+0)];
+            fp16 position_zero_cast_fp16 = mul(x = var_21_cast_fp16, y = var_22_to_fp16)[name = string("position_zero_cast_fp16")];
+            bool var_30_keep_dims_0 = const()[name = string("op_30_keep_dims_0"), val = bool(false)];
+            fp16 var_30_cast_fp16 = reduce_sum(keep_dims = var_30_keep_dims_0, x = causal_mask)[name = string("op_30_cast_fp16")];
+            fp16 var_31_to_fp16 = const()[name = string("op_31_to_fp16"), val = fp16(0x0p+0)];
+            fp16 mask_zero_cast_fp16 = mul(x = var_30_cast_fp16, y = var_31_to_fp16)[name = string("mask_zero_cast_fp16")];
+            tensor<fp16, [1]> read_state_0 = read_state(input = last_token)[name = string("read_state_0")];
+            fp16 var_39_to_fp16 = const()[name = string("op_39_to_fp16"), val = fp16(0x1p+0)];
+            tensor<fp16, [1]> var_40_cast_fp16 = add(x = read_state_0, y = var_39_to_fp16)[name = string("op_40_cast_fp16")];
+            tensor<fp16, [1]> var_42_cast_fp16 = add(x = var_40_cast_fp16, y = input_zero_cast_fp16)[name = string("op_42_cast_fp16")];
+            tensor<fp16, [1]> var_44_cast_fp16 = add(x = var_42_cast_fp16, y = position_zero_cast_fp16)[name = string("op_44_cast_fp16")];
+            tensor<fp16, [1]> var_46_cast_fp16 = add(x = var_44_cast_fp16, y = mask_zero_cast_fp16)[name = string("op_46_cast_fp16")];
+            tensor<fp16, [1]> const_0_to_fp16 = const()[name = string("const_0_to_fp16"), val = tensor<fp16, [1]>([0x1.4p+2])];
+            tensor<fp16, [1]> target_cast_fp16 = maximum(x = var_46_cast_fp16, y = const_0_to_fp16)[name = string("target_cast_fp16")];
+            tensor<fp16, [1]> var_62_cast_fp16 = sub(x = target_cast_fp16, y = read_state_0)[name = string("op_62_cast_fp16")];
+            tensor<fp16, [1]> var_64_cast_fp16 = add(x = read_state_0, y = var_62_cast_fp16)[name = string("op_64_cast_fp16")];
+            write_state(data = var_64_cast_fp16, input = last_token)[name = string("coreml_update_state_1_write_state")];
+            tensor<int32, [2]> var_67 = const()[name = string("op_67"), val = tensor<int32, [2]>([1, 1])];
+            tensor<fp16, [1, 1]> var_68_cast_fp16 = reshape(shape = var_67, x = target_cast_fp16)[name = string("op_68_cast_fp16")];
+            tensor<fp16, [1, 8]> vocab_to_fp16 = const()[name = string("vocab_to_fp16"), val = tensor<fp16, [1, 8]>([[0x0p+0, 0x1p+0, 0x1p+1, 0x1.8p+1, 0x1p+2, 0x1.4p+2, 0x1.8p+2, 0x1.cp+2]])];
+            tensor<fp16, [1, 8]> var_70_cast_fp16 = sub(x = vocab_to_fp16, y = var_68_cast_fp16)[name = string("op_70_cast_fp16")];
+            tensor<fp16, [1, 8]> var_71_cast_fp16 = abs(x = var_70_cast_fp16)[name = string("op_71_cast_fp16")];
+            fp16 const_1_promoted_to_fp16 = const()[name = string("const_1_promoted_to_fp16"), val = fp16(-0x1p+0)];
+            tensor<fp16, [1, 8]> var_72_cast_fp16 = mul(x = var_71_cast_fp16, y = const_1_promoted_to_fp16)[name = string("op_72_cast_fp16")];
+            fp16 var_73_to_fp16 = const()[name = string("op_73_to_fp16"), val = fp16(0x1.9p+6)];
+            tensor<fp16, [1, 8]> logits = mul(x = var_72_cast_fp16, y = var_73_to_fp16)[name = string("op_74_cast_fp16")];
+        } -> (logits);
+}

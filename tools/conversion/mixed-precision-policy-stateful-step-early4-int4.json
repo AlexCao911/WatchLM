@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "policyId": "stateful-step-fp16-embed-lmhead-early4-rest-int4",
+  "strategy": "mixed-precision-fidelity-first",
+  "layerCount": 24,
+  "protectedEdgeLayerCount": 0,
+  "weights": {
+    "embedding": "fp16",
+    "lmHead": "fp16",
+    "norms": "fp16",
+    "attentionQKO": "int4",
+    "attentionV": "int4",
+    "ffn": "int4"
+  },
+  "layerOverrides": {
+    "attentionQKO": {
+      "0": "fp16",
+      "1": "fp16",
+      "2": "fp16",
+      "3": "fp16"
+    },
+    "attentionV": {
+      "0": "fp16",
+      "1": "fp16",
+      "2": "fp16",
+      "3": "fp16"
+    },
+    "ffn": {
+      "0": "fp16",
+      "1": "fp16",
+      "2": "fp16",
+      "3": "fp16"
+    }
+  },
+  "kvCache": "fp16",
+  "structuralReduction": false
+}

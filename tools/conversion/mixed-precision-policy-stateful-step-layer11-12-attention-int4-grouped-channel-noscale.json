@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "policyId": "stateful-step-layer11-12-attention-int4-grouped-channel-noscale-rest-fp16",
+  "strategy": "mixed-precision-fidelity-first",
+  "layerCount": 24,
+  "protectedEdgeLayerCount": 0,
+  "weights": {
+    "embedding": "fp16",
+    "lmHead": "fp16",
+    "norms": "fp16",
+    "attentionQKO": "fp16",
+    "attentionV": "fp16",
+    "ffn": "fp16"
+  },
+  "layerOverrides": {
+    "attentionQKO": {
+      "11": "int4",
+      "12": "int4"
+    },
+    "attentionV": {
+      "11": "int4",
+      "12": "int4"
+    }
+  },
+  "int4Compression": {
+    "method": "palettization",
+    "mode": "kmeans",
+    "granularity": "per_grouped_channel",
+    "groupSize": 16,
+    "enablePerChannelScale": false,
+    "clusterDim": 1,
+    "numKMeansWorkers": 1,
+    "weightThreshold": 2048
+  },
+  "kvCache": "fp16",
+  "structuralReduction": false
+}

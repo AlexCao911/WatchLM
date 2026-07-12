@@ -1,0 +1,299 @@
+{
+  "schemaVersion": 1,
+  "sourceCheckpoint": {
+    "id": "openbmb/MiniCPM5-1B",
+    "revision": "4e9de7a0778dc1c362e983e6858f0e77542cbdca",
+    "sha256": null
+  },
+  "tokenizer": {
+    "source": "openbmb/MiniCPM5-1B",
+    "sha256": "3e065a558a034185fe299917b398685c1facd0169a9eea1e629eb30c171fed81",
+    "chatTemplate": "minicpm5-no-think",
+    "vocabularyPreserved": true
+  },
+  "artifacts": {
+    "graphInterface": "stateful-step-kv",
+    "prefillModelPath": "artifacts/coreml/real-minicpm5-stateful-step-kv-256-int4/stateful-step-kv-256-int4.mlpackage",
+    "decodeModelPath": "artifacts/coreml/real-minicpm5-stateful-step-kv-256-int4/stateful-step-kv-256-int4.mlpackage",
+    "entrypoints": ["prefill", "decode"],
+    "deviceVariants": {
+      "watch-se-2": {
+        "contextVariant": 256,
+        "graphInterface": "stateful-step-kv",
+        "prefillModelPath": "artifacts/coreml/real-minicpm5-stateful-step-kv-256-int4/stateful-step-kv-256-int4.mlpackage",
+        "decodeModelPath": "artifacts/coreml/real-minicpm5-stateful-step-kv-256-int4/stateful-step-kv-256-int4.mlpackage",
+        "compiledWatchOSModelPath": "artifacts/coreml/compiled-watchos-stateful-step-kv-256-int4/stateful-step-kv-256-int4.mlmodelc",
+        "benchmarkReportPath": "artifacts/benchmarks/stateful-step-kv-256-int4-teacher-smoke.json",
+        "maxNewTokens": 64
+      },
+      "watch-se-3": {
+        "contextVariant": 512,
+        "graphInterface": "stateful-step-kv",
+        "prefillModelPath": "artifacts/coreml/watch-se-3/stateful-step-kv-512-int4.mlpackage",
+        "decodeModelPath": "artifacts/coreml/watch-se-3/stateful-step-kv-512-int4.mlpackage",
+        "status": "planned",
+        "maxNewTokens": 96
+      }
+    }
+  },
+  "realConversionSpike": {
+    "contextVariant": 16,
+    "prefillModelPath": "artifacts/coreml/real-minicpm5-prefill-16/prefill-16.mlpackage",
+    "prefillInt8ModelPath": "artifacts/coreml/real-minicpm5-prefill-16-int8/prefill-16-int8.mlpackage",
+    "prefillInt4ModelPath": "artifacts/coreml/real-minicpm5-prefill-16-int4/prefill-16-int4.mlpackage",
+    "compiledWatchOSInt8Path": "artifacts/coreml/compiled-watchos-int8/prefill-16-int8.mlmodelc",
+    "compiledWatchOSInt4Path": "artifacts/coreml/compiled-watchos-int4/prefill-16-int4.mlmodelc",
+    "fp16Bytes": 2161952910,
+    "int8Bytes": 1082818930,
+    "int4Bytes": 541164434,
+    "watchOSDeploymentTarget": "10.0",
+    "quantizationPolicyId": "coreml-linear-symmetric-int8-and-kmeans-int4",
+    "int4Validation": {
+      "maxAbsoluteError": 15.26953125,
+      "topKAgreement": 1,
+      "top1Matches": false,
+      "summary": "Full-model int4 palettization compiles for watchOS and cuts size to about 516MB, but it is not fidelity-safe on the local prompt."
+    },
+    "kvGraphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16/prefill-kv-16.mlpackage",
+      "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16/decode-16.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16/prefill-kv-16.mlmodelc",
+      "compiledWatchOSDecodePath": "artifacts/coreml/compiled-watchos-decode-16/decode-16.mlmodelc",
+      "decodeValidation": {
+        "logitsMaxAbsoluteError": 0.19140625,
+        "kvMaxAbsoluteError": 0.087890625,
+        "topKAgreement": 9,
+        "top1Matches": true
+      }
+    },
+    "kvInt8Graphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-int8/prefill-kv-16-int8.mlpackage",
+      "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16-int8/decode-16-int8.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16-int8/prefill-kv-16-int8.mlmodelc",
+      "compiledWatchOSDecodePath": "artifacts/coreml/compiled-watchos-decode-16-int8/decode-16-int8.mlmodelc",
+      "prefillKVBytes": 1082836862,
+      "decodeBytes": 1082902834,
+      "prefillValidation": {
+        "maxAbsoluteError": 0.6669921875,
+        "topKAgreement": 10,
+        "top1Matches": true
+      },
+      "decodeValidation": {
+        "logitsMaxAbsoluteError": 0.474609375,
+        "kvMaxAbsoluteError": 0.1640625,
+        "topKAgreement": 9,
+        "top1Matches": true
+      }
+    },
+    "kvPrefillProtectedGraphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-prefill-protected/prefill-kv-16-mixed.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16-prefill-protected/prefill-kv-16-mixed.mlmodelc",
+      "prefillKVBytes": 1241841784,
+      "quantizationPolicyId": "prefill-kv-fp16-attn-ffn12-int4",
+      "selectorAudit": {
+        "int8SelectedOps": 71,
+        "int8SelectedComponents": ["embedding", "ffn", "lmHead"],
+        "int4SelectedOps": 3,
+        "int4SelectedComponent": "ffn",
+        "int4SelectedLayers": "12",
+        "attentionPrecision": "fp16",
+        "kvCachePrecision": "fp16"
+      },
+      "swiftDiagnostic": {
+        "promptId": "en-short-001",
+        "protectedPrefillToFP16DecodeTopK": [4245, 826, 11420, 5018, 2793],
+        "protectedPrefillToInt8DecodeTopK": [4245, 826, 11420, 5018, 2793],
+        "top1MatchesTeacher": true
+      },
+      "swiftBenchmark": {
+        "configurationId": "real-minicpm5-context16-prefill-protected-int8-decode-category-balanced",
+        "decodePolicyId": "global-int8",
+        "averageTokenAgreement": 0.8,
+        "averageFirstTokenMs": 2117.59,
+        "averageDecodeTokensPerSecond": 93.55,
+        "peakResidentMemoryMB": 2469.48,
+        "generatedTokenIdsByPrompt": {
+          "zh-short-001": [18487, 45105],
+          "en-short-001": [416, 4245],
+          "code-fix-001": [5028, 58863],
+          "watch-utility-001": [354, 2305],
+          "safety-refusal-001": [1974, 220]
+        }
+      },
+      "summary": "Protecting prefill attention and KV cache policy at fp16 while compressing embedding, lm_head, and FFN restores the context-16 Swift decode top-1 when paired with either fp16 or int8 decode."
+    },
+    "kvPrefillProtectedNoInt4Graphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-prefill-protected-no-int4/prefill-kv-16-mixed.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16-prefill-protected-no-int4/prefill-kv-16-mixed.mlmodelc",
+      "prefillKVBytes": 1252480141,
+      "quantizationPolicyId": "prefill-kv-fp16-attn-ffn-int8",
+      "selectorAudit": {
+        "int8SelectedOps": 74,
+        "int8SelectedComponents": ["embedding", "ffn", "lmHead"],
+        "int4SelectedOps": 0,
+        "attentionPrecision": "fp16",
+        "kvCachePrecision": "fp16"
+      },
+      "swiftDiagnostic": {
+        "promptId": "en-short-001",
+        "protectedNoInt4PrefillToFP16DecodeTopK": [826, 4245, 11420, 5018, 2793],
+        "protectedNoInt4PrefillToInt8DecodeTopK": [4245, 826, 11420, 5018, 2793],
+        "int8DecodeTop1MatchesTeacher": true
+      },
+      "swiftBenchmark": {
+        "configurationId": "real-minicpm5-context16-prefill-protected-no-int4-int8-decode-category-balanced",
+        "decodePolicyId": "global-int8",
+        "averageTokenAgreement": 1.0,
+        "averageFirstTokenMs": 2453.88,
+        "averageDecodeTokensPerSecond": 86.97,
+        "peakResidentMemoryMB": 2610.58,
+        "generatedTokenIdsByPrompt": {
+          "zh-short-001": [18487, 45105],
+          "en-short-001": [416, 4245],
+          "code-fix-001": [3342, 801],
+          "watch-utility-001": [354, 2305],
+          "safety-refusal-001": [1974, 220]
+        }
+      },
+      "summary": "Keeping prefill attention/KV at fp16 while compressing all FFN, embedding, and lm_head weights to int8 restores 5/5 prompt agreement in the context-16 Swift benchmark with int8 decode."
+    },
+    "kvMixedGraphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-mixed/prefill-kv-16-mixed.mlpackage",
+      "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16-mixed/decode-16-mixed.mlpackage",
+      "prefillKVBytes": 870070355,
+      "decodeBytes": 870136324,
+      "quantizationPolicyId": "mixed-int4-ffn-int8-attn-kv",
+      "selectorAudit": {
+        "int8SelectedOps": 110,
+        "int4SelectedOps": 60,
+        "int4SelectedComponent": "ffn",
+        "int4SelectedLayers": "2...21"
+      },
+      "prefillValidation": {
+        "maxAbsoluteError": 16.859375,
+        "topKAgreement": 2,
+        "top1Matches": false
+      },
+      "decodeValidation": {
+        "logitsMaxAbsoluteError": 9.556640625,
+        "kvMaxAbsoluteError": 3.11376953125,
+        "topKAgreement": 4,
+        "top1Matches": false
+      },
+      "summary": "Selective mixed compression works mechanically and shrinks each context-16 graph to about 830MB, but the current middle-FFN int4 policy is not fidelity-safe."
+    },
+    "kvMixedFFN12Graphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-mixed-ffn12/prefill-kv-16-mixed.mlpackage",
+      "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16-mixed-ffn12/decode-16-mixed.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16-mixed-ffn12/prefill-kv-16-mixed.mlmodelc",
+      "compiledWatchOSDecodePath": "artifacts/coreml/compiled-watchos-decode-16-mixed-ffn12/decode-16-mixed.mlmodelc",
+      "prefillKVBytes": 1072199140,
+      "decodeBytes": 1072265112,
+      "quantizationPolicyId": "mixed-int4-ffn12-int8-rest",
+      "selectorAudit": {
+        "int8SelectedOps": 167,
+        "int4SelectedOps": 3,
+        "int4SelectedComponent": "ffn",
+        "int4SelectedLayers": "12"
+      },
+      "prefillValidation": {
+        "maxAbsoluteError": 0.9697265625,
+        "topKAgreement": 10,
+        "top1Matches": true
+      },
+      "decodeValidation": {
+        "logitsMaxAbsoluteError": 0.890625,
+        "kvMaxAbsoluteError": 0.3828125,
+        "topKAgreement": 9,
+        "top1Matches": true
+      },
+      "summary": "Layer-specific mixed compression with only layer 12 FFN at int4 preserves context-16 top-1 and top-10 agreement while compiling for watchOS, but the size reduction versus int8 is small."
+    },
+    "kvMixedFFN1013Graphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-mixed-ffn10-13/prefill-kv-16-mixed.mlpackage",
+      "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16-mixed-ffn10-13/decode-16-mixed.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16-mixed-ffn10-13/prefill-kv-16-mixed.mlmodelc",
+      "compiledWatchOSDecodePath": "artifacts/coreml/compiled-watchos-decode-16-mixed-ffn10-13/decode-16-mixed.mlmodelc",
+      "prefillKVBytes": 1040284069,
+      "decodeBytes": 1040350041,
+      "quantizationPolicyId": "mixed-int4-ffn10-13-int8-rest",
+      "selectorAudit": {
+        "int8SelectedOps": 158,
+        "int4SelectedOps": 12,
+        "int4SelectedComponent": "ffn",
+        "int4SelectedLayers": "10...13"
+      },
+      "prefillValidation": {
+        "maxAbsoluteError": 1.82421875,
+        "meanAbsoluteError": 0.275522381067276,
+        "topKAgreement": 9,
+        "top1Matches": true
+      },
+      "decodeValidation": {
+        "logitsMaxAbsoluteError": 1.51470947265625,
+        "logitsMeanAbsoluteError": 0.22385700047016144,
+        "kvMaxAbsoluteError": 0.96533203125,
+        "topKAgreement": 9,
+        "top1Matches": true
+      },
+      "swiftBenchmark": {
+        "configurationId": "real-minicpm5-context16-mixed-ffn10-13-local",
+        "generatedTokenIds": [242, 38],
+        "averageTokenAgreement": 1.0
+      },
+      "summary": "Widening the FFN int4 override to layers 10...13 preserves context-16 top-1 on the local prompt and compiles for watchOS, with a larger size win than FFN12 but higher logits/KV drift."
+    },
+    "kvMixedFFN815Graphs": {
+      "prefillKVModelPath": "artifacts/coreml/real-minicpm5-prefill-kv-16-mixed-ffn8-15/prefill-kv-16-mixed.mlpackage",
+      "decodeModelPath": "artifacts/coreml/real-minicpm5-decode-16-mixed-ffn8-15/decode-16-mixed.mlpackage",
+      "compiledWatchOSPrefillKVPath": "artifacts/coreml/compiled-watchos-prefill-kv-16-mixed-ffn8-15/prefill-kv-16-mixed.mlmodelc",
+      "compiledWatchOSDecodePath": "artifacts/coreml/compiled-watchos-decode-16-mixed-ffn8-15/decode-16-mixed.mlmodelc",
+      "prefillKVBytes": 997730641,
+      "decodeBytes": 997796613,
+      "quantizationPolicyId": "mixed-int4-ffn8-15-int8-rest",
+      "selectorAudit": {
+        "int8SelectedOps": 146,
+        "int4SelectedOps": 24,
+        "int4SelectedComponent": "ffn",
+        "int4SelectedLayers": "8...15"
+      },
+      "prefillValidation": {
+        "maxAbsoluteError": 3.005859375,
+        "meanAbsoluteError": 0.44225093722343445,
+        "topKAgreement": 9,
+        "top1Matches": true
+      },
+      "decodeValidation": {
+        "logitsMaxAbsoluteError": 2.32843017578125,
+        "logitsMeanAbsoluteError": 0.5262262225151062,
+        "kvMaxAbsoluteError": 1.501708984375,
+        "kvMeanAbsoluteError": 0.11982747470998827,
+        "topKAgreement": 8,
+        "top1Matches": true
+      },
+      "swiftBenchmark": {
+        "configurationId": "real-minicpm5-context16-mixed-ffn8-15-local",
+        "generatedTokenIds": [242, 38],
+        "averageTokenAgreement": 1.0,
+        "durationSeconds": 37.638
+      },
+      "summary": "FFN8...15 preserves context-16 top-1 on the local prompt, compiles for watchOS, and runs through the Swift benchmark chain, but top-10 agreement and logits/KV drift are meaningfully worse than FFN10...13. Treat it as a size-quality frontier point, not the default policy."
+    }
+  },
+  "contextVariant": 256,
+  "quantizationPolicyId": "stateful-step-kv-int4",
+  "logitsValidation": {
+    "teacherModelId": "openbmb/MiniCPM5-1B",
+    "averageTokenAgreement": 0,
+    "qualityPromotionStatus": "blocked-by-token-agreement",
+    "benchmarkReportPath": "artifacts/benchmarks/stateful-step-kv-256-int4-teacher-smoke.json",
+    "summary": "Context-256 stateful-step int4 is the current SE2 deployability candidate because it uses one shared Core ML graph and avoids split model loading, but it is not quality-promoted: teacher smoke token agreement is 0.0."
+  },
+  "excludedLargeArtifactPaths": [
+    "artifacts/**/*.mlpackage",
+    "artifacts/**/*.mlmodelc",
+    "artifacts/**/*.gguf",
+    "artifacts/**/*.safetensors",
+    "artifacts/benchmarks/**/*.json"
+  ]
+}

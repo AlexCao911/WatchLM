@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "candidates": [
+    {
+      "id": "minicpm5-1b-v-low8",
+      "sourceModelId": "openbmb/MiniCPM5-1B",
+      "role": "teacher-baseline",
+      "parameterCount": 1000000000,
+      "contextTokens": 256,
+      "tokenizerBytes": 9894271,
+      "measuredArtifactBytes": 2157454606,
+      "measuredPeakRSSBytes": 2186580000,
+      "architecture": {
+        "parameterCount": 1000000000,
+        "layers": 24,
+        "hiddenSize": 1536,
+        "queryHeads": 16,
+        "kvHeads": 2,
+        "headDimension": 128
+      },
+      "quantization": {
+        "weightBits": 16,
+        "kvBytes": 2,
+        "strategy": "attentionV-low8-int4-rest-fp16"
+      },
+      "runtime": {
+        "coreMLLoadMultiplier": 1.0,
+        "temporaryArenaBytes": 0
+      }
+    },
+    {
+      "id": "distilled-watchlm-350m-int4",
+      "sourceModelId": "watchlm/distilled-350m",
+      "modelFamily": "watchlm-distilled",
+      "conversionRisk": "low",
+      "conversionPriority": 3,
+      "role": "runtime-candidate",
+      "parameterCount": 350000000,
+      "contextTokens": 256,
+      "tokenizerBytes": 10000000,
+      "architecture": {
+        "parameterCount": 350000000,
+        "layers": 24,
+        "hiddenSize": 1024,
+        "queryHeads": 16,
+        "kvHeads": 2,
+        "headDimension": 64
+      },
+      "quantization": {
+        "weightBits": 4,
+        "kvBytes": 2,
+        "compressionOverhead": 1.25,
+        "strategy": "distilled-int4-fidelity-first"
+      },
+      "runtime": {
+        "coreMLLoadMultiplier": 1.79,
+        "temporaryArenaBytes": 64000000
+      }
+    },
+    {
+      "id": "distilled-watchlm-600m-int4",
+      "sourceModelId": "watchlm/distilled-600m",
+      "modelFamily": "watchlm-distilled",
+      "conversionRisk": "medium",
+      "conversionPriority": 5,
+      "role": "runtime-candidate",
+      "parameterCount": 600000000,
+      "contextTokens": 256,
+      "tokenizerBytes": 10000000,
+      "architecture": {
+        "parameterCount": 600000000,
+        "layers": 24,
+        "hiddenSize": 1280,
+        "queryHeads": 16,
+        "kvHeads": 2,
+        "headDimension": 80
+      },
+      "quantization": {
+        "weightBits": 4,
+        "kvBytes": 2,
+        "compressionOverhead": 1.25,
+        "strategy": "distilled-int4-stretch"
+      },
+      "runtime": {
+        "coreMLLoadMultiplier": 2.2,
+        "temporaryArenaBytes": 76000000
+      }
+    },
+    {
+      "id": "qwen3-0.6b-int4",
+      "sourceModelId": "Qwen/Qwen3-0.6B",
+      "sourceURL": "https://huggingface.co/Qwen/Qwen3-0.6B",
+      "modelFamily": "qwen3",
+      "license": "apache-2.0",
+      "conversionRisk": "medium",
+      "conversionPriority": 1,
+      "role": "runtime-candidate",
+      "parameterCount": 600000000,
+      "contextTokens": 256,
+      "tokenizerBytes": 30000000,
+      "architecture": {
+        "parameterCount": 600000000,
+        "layers": 28,
+        "hiddenSize": 1024,
+        "queryHeads": 16,
+        "kvHeads": 8,
+        "headDimension": 128,
+        "vocabSize": 151936
+      },
+      "quantization": {
+        "weightBits": 4,
+        "kvBytes": 2,
+        "compressionOverhead": 1.18,
+        "strategy": "qwen3-text-int4-fidelity-first"
+      },
+      "runtime": {
+        "coreMLLoadMultiplier": 1.62,
+        "temporaryArenaBytes": 96000000
+      }
+    },
+    {
+      "id": "smollm2-135m-int4",
+      "sourceModelId": "HuggingFaceTB/SmolLM2-135M-Instruct",
+      "sourceURL": "https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct",
+      "modelFamily": "smollm2",
+      "license": "apache-2.0",
+      "conversionRisk": "low",
+      "conversionPriority": 2,
+      "role": "runtime-candidate",
+      "parameterCount": 135000000,
+      "contextTokens": 256,
+      "tokenizerBytes": 12000000,
+      "architecture": {
+        "parameterCount": 135000000,
+        "layers": 30,
+        "hiddenSize": 576,
+        "queryHeads": 9,
+        "kvHeads": 3,
+        "headDimension": 64,
+        "vocabSize": 49152
+      },
+      "quantization": {
+        "weightBits": 4,
+        "kvBytes": 2,
+        "compressionOverhead": 1.2,
+        "strategy": "smollm2-llama-int4-smoke"
+      },
+      "runtime": {
+        "coreMLLoadMultiplier": 1.7,
+        "temporaryArenaBytes": 64000000
+      }
+    },
+    {
+      "id": "qwen3.5-0.8b-text-only-int4",
+      "sourceModelId": "Qwen/Qwen3.5-0.8B",
+      "sourceURL": "https://huggingface.co/Qwen/Qwen3.5-0.8B",
+      "modelFamily": "qwen3.5",
+      "license": "apache-2.0",
+      "conversionRisk": "high",
+      "conversionPriority": 4,
+      "role": "runtime-candidate",
+      "parameterCount": 800000000,
+      "contextTokens": 256,
+      "tokenizerBytes": 50000000,
+      "architecture": {
+        "parameterCount": 800000000,
+        "layers": 24,
+        "hiddenSize": 1024,
+        "queryHeads": 8,
+        "kvHeads": 2,
+        "headDimension": 256,
+        "vocabSize": 248320
+      },
+      "quantization": {
+        "weightBits": 4,
+        "kvBytes": 2,
+        "compressionOverhead": 1.25,
+        "strategy": "qwen3.5-language-model-only-stretch"
+      },
+      "runtime": {
+        "coreMLLoadMultiplier": 1.85,
+        "temporaryArenaBytes": 120000000
+      }
+    }
+  ]
+}

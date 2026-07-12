@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "policyId": "importance-v8-ffn-gateup4-down4-lowrisk-int4",
+  "strategy": "mixed-precision-fidelity-first",
+  "layerCount": 24,
+  "protectedEdgeLayerCount": 0,
+  "weights": {
+    "attentionQKO": "fp16",
+    "attentionV": "fp16",
+    "embedding": "fp16",
+    "ffn": "fp16",
+    "lmHead": "fp16",
+    "norms": "fp16"
+  },
+  "layerOverrides": {
+    "attentionV": {
+      "6": "int4",
+      "7": "int4",
+      "8": "int4",
+      "9": "int4",
+      "10": "int4",
+      "11": "int4",
+      "12": "int4",
+      "13": "int4"
+    },
+    "ffnGateUp": {
+      "5": "int4",
+      "6": "int4",
+      "7": "int4",
+      "9": "int4"
+    },
+    "ffnDown": {
+      "6": "int4",
+      "7": "int4",
+      "9": "int4",
+      "10": "int4"
+    }
+  },
+  "kvCache": "fp16",
+  "structuralReduction": false,
+  "candidateEvidence": {
+    "sourceReports": [
+      "artifacts/benchmarks/minicpm5-activation-importance-cal12-groups.json",
+      "artifacts/benchmarks/minicpm5-activation-importance-cal12-split-ffn-groups.json"
+    ],
+    "sourcePromptCount": 12,
+    "selectionRule": "reuse full-calibration-passing attentionV low8; add split-FFN components that pass activation-weighted risk gate",
+    "riskGate": {
+      "maxTopColumnEnergyFraction": 0.05,
+      "maxLayerWeightedRisk": 0.08,
+      "maxWeightedRisk": 0.2
+    },
+    "components": {
+      "attentionV": {
+        "sourcePolicy": "tools/conversion/mixed-precision-policy-stateful-step-importance-attention-v-low8-lowrisk-int4.json",
+        "selectedLayers": [6, 7, 8, 9, 10, 11, 12, 13]
+      },
+      "ffnGateUp": {
+        "sourcePolicy": "tools/conversion/mixed-precision-policy-stateful-step-importance-ffn-gateup-low4-lowrisk-int4.json",
+        "selectedLayers": [5, 6, 7, 9]
+      },
+      "ffnDown": {
+        "sourcePolicy": "tools/conversion/mixed-precision-policy-stateful-step-importance-ffn-down-low4-lowrisk-int4.json",
+        "selectedLayers": [6, 7, 9, 10]
+      }
+    }
+  }
+}

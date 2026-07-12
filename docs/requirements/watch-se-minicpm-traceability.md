@@ -49,6 +49,20 @@ This document maps the user goal and architecture decisions to concrete delivera
 | MiniCPM artifact integration | R2, R3, R4, R5, R6, R7, R8, R9, R12 | Conversion report, model manifest, device benchmark |
 | Optimization | R4, R6, R7, R9, R14 | Mixed precision report, lm_head report, speculative decoding report if used |
 
+## Current Implementation Evidence
+
+| Area | Evidence |
+| --- | --- |
+| Implementation plan | `docs/superpowers/plans/2026-05-29-watch-se-minicpm-implementation.md` |
+| Architecture refactor plan | `docs/superpowers/plans/2026-05-29-modelruntime-architecture-refactor.md` |
+| Host manifest contract | `tools/validation/modelManifest.js`, `tools/validation/fixtures/sample-model-manifest.json`, `test/modelManifest.test.js` |
+| Benchmark prompts | `tools/benchmark/benchmarkPrompts.js`, `tools/benchmark/fixtures/benchmark-prompts.json`, `test/benchmarkPrompts.test.js` |
+| Benchmark report gates | `tools/benchmark/benchmarkReport.js`, `tools/benchmark/fixtures/sample-benchmark-report.json`, `test/benchmarkReport.test.js` |
+| Local validation CLI | `tools/validation/watchlm-validate.js`, `test/validationCli.test.js` |
+| Swift runtime contracts | `Sources/ModelRuntime`, `Tests/WatchLMCoreTests` |
+| Conversion artifact contract | `tools/conversion/coreml-artifact-contract.json`, `tools/conversion/README.md`, `test/conversionContract.test.js` |
+| Watch app shell checkpoint | `docs/watch-app-shell.md` |
+
 ## Completion Evidence Checklist
 
 The goal cannot be marked complete until current-state evidence proves all applicable items:
@@ -56,12 +70,12 @@ The goal cannot be marked complete until current-state evidence proves all appli
 - Design spec exists and is committed.
 - ADR exists and is committed.
 - Implementation plan exists and is committed after design approval.
-- Repository contains implementation artifacts, not only documentation.
+- Repository contains implementation artifacts, not only documentation. Evidence: host Node tooling and Swift runtime contracts.
 - Each completed implementation part has a corresponding git commit.
-- Host tooling has tests that pass locally.
+- Host tooling has tests that pass locally. Evidence: `node --test`.
 - watchOS app shell exists and builds or has a documented reproducible blocker.
-- Runtime interfaces are testable without a real model artifact.
-- Model manifest and asset-manager behavior are implemented.
+- Runtime interfaces are testable without a real model artifact. Evidence: `MockStreamingRuntime` and Swift tests.
+- Model manifest and asset-manager behavior are implemented as contracts. Evidence: manifest validator and `ModelAssetState`.
 - Benchmark schema and at least one sample report exist.
 - If a real MiniCPM Core ML artifact is not committed because of size, the repo includes reproducible conversion/packaging commands and a manifest contract.
 - Fallback decisions are supported by benchmark evidence rather than convenience.

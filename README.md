@@ -1,0 +1,46 @@
+# WatchLM
+
+WatchLM is a staged implementation project for running `openbmb/MiniCPM5-1B` locally on Apple Watch SE-class hardware.
+
+The first executable layer is host-side validation for the artifacts that later Core ML conversion and watchOS runtime work will consume:
+
+- model manifests that preserve the MiniCPM5-1B architecture contract.
+- benchmark prompts that cover Chinese, English, coding, watch utility, and safety probes.
+- benchmark reports with SE 2 and SE 3 usability gates.
+
+## Local Validation
+
+Run all current tests:
+
+```sh
+node --test
+```
+
+Validate individual evidence files:
+
+```sh
+node tools/validation/watchlm-validate.js manifest tools/validation/fixtures/sample-model-manifest.json
+node tools/validation/watchlm-validate.js prompts tools/benchmark/fixtures/benchmark-prompts.json
+node tools/validation/watchlm-validate.js report tools/benchmark/fixtures/sample-benchmark-report.json
+```
+
+Validate all host-side contracts:
+
+```sh
+node tools/validation/watchlm-validate.js all \
+  --manifest tools/validation/fixtures/sample-model-manifest.json \
+  --prompts tools/benchmark/fixtures/benchmark-prompts.json \
+  --report tools/benchmark/fixtures/sample-benchmark-report.json
+```
+
+## Repository Layout
+
+Swift runtime code lives under `Sources/ModelRuntime`; the Swift package still exposes the product and target as `WatchLMCore` for API stability. Host-side JavaScript workflows live under `tools/`:
+
+- `tools/conversion`: Core ML conversion contracts and smoke model generation.
+- `tools/benchmark`: benchmark prompt/report schemas and fixtures.
+- `tools/validation`: model manifest validation and the local CLI.
+
+## Artifact Policy
+
+Real `.mlpackage`, compiled `.mlmodelc`, GGUF, and checkpoint files are intentionally not committed. They will be generated or installed outside the main watchOS app bundle and represented in git by manifests, conversion contracts, and benchmark reports.
